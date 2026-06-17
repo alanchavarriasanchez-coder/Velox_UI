@@ -12,21 +12,33 @@ function parseMessageContent(content: string): { thinkingText: string; finalText
   const thinkClose = '</think>';
 
   const openIdx = content.indexOf(thinkOpen);
+  const closeIdx = content.indexOf(thinkClose);
+
+  // Caso 1: El modelo omitió <think> pero SÍ cerró con </think>
+  if (openIdx === -1 && closeIdx !== -1) {
+    return {
+      thinkingText: content.slice(0, closeIdx).trim(),
+      finalText: content.slice(closeIdx + thinkClose.length).trim()
+    };
+  }
+
+  // Caso 2: No hay ni apertura ni cierre (texto normal)
   if (openIdx === -1) {
     return { thinkingText: '', finalText: content };
   }
 
-  const closeIdx = content.indexOf(thinkClose, openIdx + thinkOpen.length);
-  if (closeIdx === -1) {
+  // Caso 3: Streaming activo (abrió <think> pero aún no hay </think>)
+  if (closeIdx === -1 || closeIdx < openIdx) {
     return {
-      thinkingText: content.slice(openIdx + thinkOpen.length),
-      finalText: content.slice(0, openIdx)
+      thinkingText: content.slice(openIdx + thinkOpen.length).trim(),
+      finalText: content.slice(0, openIdx).trim()
     };
   }
 
+  // Caso 4: Comportamiento ideal (tiene ambos tags)
   return {
-    thinkingText: content.slice(openIdx + thinkOpen.length, closeIdx),
-    finalText: content.slice(0, openIdx) + content.slice(closeIdx + thinkClose.length)
+    thinkingText: content.slice(openIdx + thinkOpen.length, closeIdx).trim(),
+    finalText: (content.slice(0, openIdx) + content.slice(closeIdx + thinkClose.length)).trim()
   };
 }
 
