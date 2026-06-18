@@ -8,9 +8,17 @@ interface SidebarProps {
   onNewChat: () => void;
   onSelectSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void;
+  onOpenSettings: () => void; // <-- Nueva prop
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ sessions, currentSessionId, onNewChat, onSelectSession, onDeleteSession }) => {
+const Sidebar: React.FC<SidebarProps> = ({
+  sessions,
+  currentSessionId,
+  onNewChat,
+  onSelectSession,
+  onDeleteSession,
+  onOpenSettings, // <-- la usamos abajo
+}) => {
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-neutral-800/60 bg-neutral-950">
       {/* Brand */}
@@ -85,6 +93,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sessions, currentSessionId, onNewChat
       <div className="border-t border-neutral-800/60 p-3">
         <button
           type="button"
+          onClick={onOpenSettings} // <-- Ahora abre el modal
           className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-neutral-400 transition-colors hover:bg-neutral-900 hover:text-neutral-200"
         >
           <Settings className="size-4 text-neutral-500" />

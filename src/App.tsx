@@ -248,6 +248,7 @@ export default function App() {
         onNewChat={handleNewChat}
         onSelectSession={handleSelectSession}
         onDeleteSession={handleDeleteSession}
+        onOpenSettings={() => setIsSettingsOpen(true)}  // <-- Pasa la función
       />
       <ChatArea
         messages={currentSession?.messages ?? []}
@@ -256,6 +257,42 @@ export default function App() {
         // CORRECCIÓN: Inyección del callback para disparar el borrado del chat actual desde el Header
         onDeleteCurrentSession={() => currentSessionId && handleDeleteSession(currentSessionId)}
       />
+
+      {/* Modal de configuración de IP */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-neutral-800 rounded-xl p-6 w-80">
+            <h2 className="text-lg font-semibold text-neutral-100 mb-4">Configuración</h2>
+            <label className="block text-sm text-neutral-300 mb-1">IP del backend</label>
+            <input
+              id="settings-ip-input"
+              type="text"
+              defaultValue={backendIp}
+              className="w-full bg-neutral-700 border border-neutral-600 rounded px-3 py-2 text-neutral-200 mb-4 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="localhost"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsSettingsOpen(false)}
+                className="px-4 py-2 text-sm text-neutral-300 bg-neutral-700 rounded hover:bg-neutral-600 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const ipInput = document.getElementById('settings-ip-input') as HTMLInputElement;
+                  if (ipInput) handleSaveSettings(ipInput.value);
+                }}
+                className="px-4 py-2 text-sm text-white bg-emerald-600 rounded hover:bg-emerald-500 transition-colors"
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
