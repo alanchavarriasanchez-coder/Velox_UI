@@ -91,6 +91,8 @@ export default function App() {
         };
         setSessions([defaultSession]);
         setCurrentSessionId(defaultSession.id);
+        // Persistir la sesión por defecto inmediatamente
+        saveSessions([defaultSession]);
       }
     })();
   }, []);
@@ -121,6 +123,19 @@ export default function App() {
   const handleSelectSession = useCallback((sessionId: string) => {
     setCurrentSessionId(sessionId);
   }, []);
+
+  const handleFirstUserMessage = useCallback((userMessage: string) => {
+    if (!currentSession) return;
+    if (currentSession.title === 'Nuevo Chat') {
+      const newTitle = userMessage.trim().slice(0, 30);
+      const updatedSessions = sessions.map((s) =>
+        s.id === currentSession.id
+          ? { ...s, title: newTitle, updatedAt: Date.now() }
+          : s
+      );
+      setSessions(updatedSessions);
+    }
+  }, [sessions, currentSession]);
 
   const currentSession = sessions.find((s) => s.id === currentSessionId) ?? null;
 
@@ -160,6 +175,7 @@ export default function App() {
       <ChatArea
         messages={currentSession?.messages ?? []}
         setMessages={setMessagesForCurrentSession}
+        onFirstUserMessage={handleFirstUserMessage}
       />
     </div>
   );

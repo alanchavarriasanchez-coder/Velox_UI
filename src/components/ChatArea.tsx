@@ -7,6 +7,7 @@ import { Message } from '../App';
 interface ChatAreaProps {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+  onFirstUserMessage?: (userMessage: string) => void;
 }
 
 // Función auxiliar para extraer el contenido de pensamiento y el texto final
@@ -45,7 +46,7 @@ function parseMessageContent(content: string): { thinkingText: string; finalText
   };
 }
 
-const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage }) => {
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [availableModels, setAvailableModels] = useState<{ id: string; size_mb: number }[]>([]);
@@ -91,6 +92,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages }) => {
   const handleSend = async () => {
     const trimmed = input.trim();
     if (!trimmed || isGenerating) return;
+
+    // Renombrar el chat si es el primer mensaje del usuario
+    if (onFirstUserMessage) {
+      onFirstUserMessage(trimmed);
+    }
 
     const userMessage: Message = { role: 'user', content: trimmed };
     const assistantPlaceholder: Message = { role: 'assistant', content: '' };
