@@ -190,7 +190,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
               const parsed = JSON.parse(data); // { choices: [{ delta: { content: "..." } }] }
               const delta = parsed?.choices?.[0]?.delta?.content;
               if (delta) {
-                // Actualización progresiva del contenido
+                // Actualización progresiva del contenido (incluye manejo de <think>)
                 setMessages(prev => {
                   const updated = [...prev];
                   const last = updated[updated.length - 1];
