@@ -196,11 +196,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
               if (delta) {
                 // Actualización progresiva del contenido (incluye manejo de <think>)
                 setMessages(prev => {
-                  const updated = [...prev];
-                  const last = updated[updated.length - 1];
-                  if (last && last.role === 'assistant') {
-                    updated[updated.length - 1] = { ...last, content: last.content + delta };
-                  }
+                  const updated = prev.map(msg => {
+                    if (msg.id === assistantMsgId) {
+                      return { ...msg, content: msg.content + delta };
+                    }
+                    return msg;
+                  });
                   return updated;
                 });
               }
