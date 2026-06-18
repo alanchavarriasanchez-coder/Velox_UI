@@ -174,7 +174,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       const decoder = new TextDecoder();
       let buffer = '';
 
-      let dentroDeThink = false;
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -192,50 +191,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
               break;
             }
             try {
-              const parsed = JSON.parse(data); // { choices: [{ delta: { content: "..." } }] }
+              const parsed = JSON.parse(data);
               const delta = parsed?.choices?.[0]?.delta?.content;
               if (delta) {
-                // Procesar el fragmento de texto, manejando etiquetas <think> y </think>
-                let remaining = delta;
-                let contentToAdd = '';
-                let reasoningToAdd = '';
-                while (remaining.length > 0) {
-                  if (!dentroDeThink) {
-                    const thinkIdx = remaining.indexOf('<think>');
-                    if (thinkIdx !== -1) {
-                      contentToAdd += remaining.slice(0, thinkIdx);
-                      dentroDeThink = true;
-                      remaining = remaining.slice(thinkIdx + '<think>'.length);
-                      // Continuar procesando el resto como razonamiento
-                    } else {
-                      contentToAdd += remaining;
-                      remaining = '';
-                    }
-                  } else {
-                    const closeIdx = remaining.indexOf('</think>');
-                    if (closeIdx !== -1) {
-                      reasoningToAdd += remaining.slice(0, closeIdx);
-                      dentroDeThink = false;
-                      remaining = remaining.slice(closeIdx + '</think>'.length);
-                      // Continuar procesando el resto como contenido
-                    } else {
-                      reasoningToAdd += remaining;
-                      remaining = '';
-                    }
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last && last.role === 'assistant') {
+                    updated[updated.length - 1] = { ...last, content: last.content + delta };
                   }
-                }
-                // Actualización progresiva del contenido y razonamiento
-                setMessages(prev => {
-                  const updated = prev.map(msg => {
-                    if (msg.id === assistantMsgId) {
-                      return {
-                        ...msg,
-                        content: msg.content + contentToAdd,
-                        reasoning: (msg.reasoning || '') + reasoningToAdd,
-                      };
-                    }
-                    return msg;
-                  });
                   return updated;
                 });
               }
