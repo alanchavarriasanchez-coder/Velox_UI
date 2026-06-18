@@ -259,34 +259,34 @@ export default function App() {
         backendIp={backendIp}  // <-- Pasamos la IP actual
       />
 
-      {/* Modal de configuración de IP */}
+      {/* Modal de configuración de IP - Rediseñado */}
       {isSettingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-neutral-800 rounded-xl p-6 w-80">
-            <h2 className="text-lg font-semibold text-neutral-100 mb-4">Configuración</h2>
-            <label className="block text-sm text-neutral-300 mb-1">IP del backend</label>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-80 rounded-xl border border-neutral-800 bg-neutral-950 p-4 shadow-2xl">
+            <h3 className="font-mono text-sm font-medium text-neutral-200 mb-3">Configuración de Red</h3>
+            <label className="block font-mono text-[11px] text-neutral-500 uppercase mb-1">
+              IP del Servidor (PC)
+            </label>
             <input
-              id="settings-ip-input"
               type="text"
               defaultValue={backendIp}
-              className="w-full bg-neutral-700 border border-neutral-600 rounded px-3 py-2 text-neutral-200 mb-4 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              placeholder="localhost"
+              id="settings-ip-input"
+              placeholder="Ej: 100.117.217.49"
+              className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 font-mono text-xs text-neutral-100 outline-none focus:border-neutral-700"
             />
-            <div className="flex justify-end gap-2">
+            <div className="mt-4 flex justify-end gap-2 text-xs font-mono">
               <button
-                type="button"
                 onClick={() => setIsSettingsOpen(false)}
-                className="px-4 py-2 text-sm text-neutral-300 bg-neutral-700 rounded hover:bg-neutral-600 transition-colors"
+                className="rounded-md px-3 py-1.5 text-neutral-400 hover:bg-neutral-900"
               >
                 Cancelar
               </button>
               <button
-                type="button"
                 onClick={() => {
-                  const ipInput = document.getElementById('settings-ip-input') as HTMLInputElement;
-                  if (ipInput) handleSaveSettings(ipInput.value);
+                  const inputEl = document.getElementById('settings-ip-input') as HTMLInputElement;
+                  if (inputEl) handleSaveSettings(inputEl.value.trim());
                 }}
-                className="px-4 py-2 text-sm text-white bg-emerald-600 rounded hover:bg-emerald-500 transition-colors"
+                className="rounded-md bg-emerald-500/10 px-3 py-1.5 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
               >
                 Guardar
               </button>
