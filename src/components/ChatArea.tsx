@@ -51,7 +51,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const [isGenerating, setIsGenerating] = useState(false);
   const [availableModels, setAvailableModels] = useState<{ id: string; size_mb: number }[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
-  const assistantIndexRef = useRef<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -99,14 +98,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     }
 
     const userMessage: Message = { role: 'user', content: trimmed };
-    const assistantPlaceholder: Message = { role: 'assistant', content: '' };
 
-    setMessages(prev => {
-      const newMessages = [...prev, userMessage, assistantPlaceholder];
-      assistantIndexRef.current = newMessages.length - 1;
-      return newMessages;
-    });
-
+    // Optimistic update: añadir mensaje del usuario inmediatamente
+    setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsGenerating(true);
 
@@ -117,7 +111,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
         body: JSON.stringify({
           model: selectedModel,
           messages: [...messages, userMessage],
-          stream: false, // no streaming, plain text response
+          stream: false,
         }),
       });
 
@@ -127,30 +121,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
 
       const text = await response.text();
 
-      setMessages(prev => {
-        const updated = [...prev];
-        const idx = assistantIndexRef.current;
-        if (idx !== null && idx < updated.length) {
-          updated[idx] = {
-            ...updated[idx],
-            content: text,
-          };
-        }
-        return updated;
-      });
+      // Añadir mensaje del asistente después de recibir la respuesta
+      setMessages(prev => [...prev, { role: 'assistant', content: text }]);
     } catch (error) {
       console.error('Error fetching chat completion:', error);
-      setMessages(prev => {
-        const updated = [...prev];
-        const idx = assistantIndexRef.current;
-        if (idx !== null && idx < updated.length) {
-          updated[idx] = {
-            ...updated[idx],
-            content: 'Error al conectar con el servidor.',
-          };
-        }
-        return updated;
-      });
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Error al conectar con el servidor.' }]);
     } finally {
       setIsGenerating(false);
     }
@@ -249,38 +224,38 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
                           type="button"
                           onClick={() => {}}
                           className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-neutral-800/40 ${
-                            idx === messages.length - 1 && isGenerating ? 'open' : ''
+                            msg.role === 'assistant' && idx === messages.length - 1 && isGenerating ? 'open' : ''
                           }`}
-                          aria-expanded={idx === messages.length - 1 && isGenerating ? true : false}
+                          aria-expanded={msg.role === 'assistant' && idx === messages.length - 1 && isGenerating ? true : false}
                         >
-                          {idx === messages.length - 1 && isGenerating ? (
+                          {msg.role === 'assistant' && idx === messages.length - 1 && isGenerating ? (
                             <Loader2 className="size-3.5 shrink-0 animate-spin text-neutral-400" />
                           ) : (
                             <Brain className="size-3.5 shrink-0 text-neutral-500" />
                           )}
                           <span
                             className={`font-mono text-xs ${
-                              idx === messages.length - 1 && isGenerating
+                              msg.role === 'assistant' && idx === messages.length - 1 && isGenerating
                                 ? 'animate-pulse text-neutral-400'
                                 : 'text-neutral-500'
                             }`}
                           >
-                            {idx === messages.length - 1 && isGenerating
+                            {msg.role === 'assistant' && idx === messages.length - 1 && isGenerating
                               ? 'Razonando…'
                               : 'Cadena de pensamiento'}
                           </span>
                           <ChevronRight
                             className={`ml-auto size-3.5 text-neutral-600 transition-transform ${
-                              idx === messages.length - 1 && isGenerating ? 'rotate-90' : ''
+                              msg.role === 'assistant' && idx === messages.length - 1 && isGenerating ? 'rotate-90' : ''
                             }`}
                           />
                         </button>
 
-                        {(idx === messages.length - 1 && isGenerating) || !isGenerating ? (
+                        {(msg.role === 'assistant' && idx === messages.length - 1 && isGenerating) || !isGenerating ? (
                           <div className="border-t border-neutral-800/60 px-3 py-2.5">
                             <p className="whitespace-pre-wrap text-xs italic leading-relaxed text-neutral-500">
                               {thinkingText}
-                              {idx === messages.length - 1 && isGenerating && (
+                              {msg.role === 'assistant' && idx === messages.length - 1 && isGenerating && (
                                 <span className="ml-0.5 inline-block animate-pulse">▍</span>
                               )}
                             </p>
@@ -353,6 +328,22 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
                 </div>
               );
             })}
+          </div>
+        )}
+        {/* Indicador de carga mientras se genera la respuesta */}
+        {isGenerating && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
+          <div className="flex gap-4 px-4 py-5">
+            <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-neutral-700/60 bg-neutral-900 text-emerald-400">
+              <Sparkles className="size-3.5" />
+            </div>
+            <div className="min-w-0 flex-1 pt-0.5">
+              <div className="mb-1.5 font-mono text-xs text-neutral-500">VeloxUI</div>
+              <div className="flex items-center gap-1">
+                <span className="inline-block size-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="inline-block size-2 rounded-full bg-emerald-400 animate-pulse" style={{ animationDelay: '0.2s' }} />
+                <span className="inline-block size-2 rounded-full bg-emerald-400 animate-pulse" style={{ animationDelay: '0.4s' }} />
+              </div>
+            </div>
           </div>
         )}
         <div ref={messagesEndRef} />
