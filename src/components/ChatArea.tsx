@@ -172,8 +172,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
+      // CORRECCIÓN: Verificar que response.body no sea null antes de llamar a getReader()
+      if (!response.body) throw new Error('No readable stream');
       const reader = response.body.getReader();
-      if (!reader) throw new Error('No readable stream');
 
       const decoder = new TextDecoder();
       let buffer = '';
@@ -448,7 +449,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
                           pre: ({ children }) => children,
                           
                           // REVISIÓN V10: Adaptación del componente code sin la propiedad 'inline'
-                          code: ({ className, children, ...props }) => {
+                          // CORRECCIÓN: se eliminó ...props del destructuring ya que no se usaba
+                          code: ({ className, children }) => {
                             const match = /language-(\w+)/.exec(className || '');
                             const contentString = String(children);
                             
