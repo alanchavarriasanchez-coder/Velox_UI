@@ -304,6 +304,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
             <span className="font-mono text-xs text-neutral-400">
               Dispositivo: <span className="text-neutral-200">GPU Intel Arc</span>
             </span>
+            {/* REVISIÓN: Muestra los tokens/s dinámicamente si se está generando texto */}
+            {tps !== null && (
+              <span className="ml-2 border-l border-neutral-800 pl-2 font-mono text-xs text-emerald-400 animate-pulse">
+                {tps} tok/s
+              </span>
+            )}
           </div>
 
           {/* Delete current session button */}
