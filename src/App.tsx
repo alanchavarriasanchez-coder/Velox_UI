@@ -67,7 +67,8 @@ async function saveSessions(sessions: ChatSession[]): Promise<void> {
   // Ensure directory exists
   const dirExists = await exists(chatsDir, { baseDir: BaseDirectory.AppData });
   if (!dirExists) {
-    await mkdir(chatsDir, { baseDir: BaseDirectory.AppData });
+    // REVISIÓN: Agregamos recursive: true aquí también
+    await mkdir(chatsDir, { baseDir: BaseDirectory.AppData, recursive: true });
   }
 
   // Write each session as its own file
