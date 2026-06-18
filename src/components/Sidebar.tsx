@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, MessageSquare, Settings, Cpu } from 'lucide-react';
+import { Plus, MessageSquare, Settings, Cpu, Trash2 } from 'lucide-react';
 import { ChatSession } from '../App';
 
 interface SidebarProps {
@@ -57,16 +57,19 @@ const Sidebar: React.FC<SidebarProps> = ({ sessions, currentSessionId, onNewChat
                 <MessageSquare className="size-3.5 shrink-0 text-neutral-600" />
                 <span className="truncate font-mono text-xs">{session.title}</span>
               </button>
+              {/* Botón de borrado mejorado en el Sidebar */}
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onDeleteSession(session.id);
+                  if (window.confirm('¿Eliminar conversación?')) {
+                    onDeleteSession(session.id);
+                  }
                 }}
-                className="absolute right-1 top-1/2 -translate-y-1/2 flex size-5 items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-neutral-700 text-neutral-500 hover:text-neutral-200"
+                className="absolute right-1 top-1/2 -translate-y-1/2 flex size-5 items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-all hover:bg-red-950/40 text-neutral-500 hover:text-red-400"
                 aria-label="Eliminar conversación"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                <Trash2 className="size-3" />
               </button>
             </li>
           ))}
