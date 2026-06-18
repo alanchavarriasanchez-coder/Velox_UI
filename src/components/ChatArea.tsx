@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ArrowUp, Square, Sparkles, User, Brain, ChevronRight, Loader2, Trash2 } from 'lucide-react';
+import { ArrowUp, Square, Sparkles, User, Brain, ChevronRight, Loader2, Trash2, Menu } from 'lucide-react';
 import { Message } from '../App';
 
 interface ChatAreaProps {
@@ -280,13 +280,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
         <div className="flex items-center gap-2">
           {onToggleSidebar && (
             <button
+              type="button"
               onClick={onToggleSidebar}
-              className="md:hidden flex items-center justify-center size-8 rounded-lg border border-neutral-800 bg-neutral-900 text-neutral-400 hover:text-neutral-200 transition-colors"
+              className="flex size-8 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-neutral-400 md:hidden hover:text-neutral-200"
               aria-label="Abrir menú"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 8h16M4 16h16" />
-              </svg>
+              <Menu className="size-4" />
             </button>
           )}
           {/* Model selector */}
