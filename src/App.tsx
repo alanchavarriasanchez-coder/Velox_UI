@@ -33,7 +33,8 @@ async function loadSessions(): Promise<ChatSession[]> {
     const chatsDir = 'chats';
     const dirExists = await exists(chatsDir, { baseDir: BaseDirectory.AppData });
     if (!dirExists) {
-      await mkdir(chatsDir, { baseDir: BaseDirectory.AppData });
+      // REVISIÓN: Agregamos recursive: true para crear carpetas padre si no existen
+      await mkdir(chatsDir, { baseDir: BaseDirectory.AppData, recursive: true });
     }
 
     // Read directory contents
