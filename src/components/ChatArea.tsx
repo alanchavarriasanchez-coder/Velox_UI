@@ -177,6 +177,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       const decoder = new TextDecoder();
       let buffer = '';
 
+      // REVISIÓN: Variables locales de control para la velocidad
+      let tokenCount = 0;
+      let startTime = 0;
+      setTps(null); // Reiniciar el contador al empezar
+
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -197,6 +202,18 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
               const parsed = JSON.parse(data);
               const delta = parsed?.choices?.[0]?.delta?.content;
               if (delta) {
+                // REVISIÓN: Inicializar el temporizador en el primer token real
+                if (tokenCount === 0) {
+                  startTime = performance.now();
+                }
+                tokenCount++;
+
+                // Calcular la velocidad en tiempo real
+                const elapsedTime = (performance.now() - startTime) / 1000; // convertir a segundos
+                if (elapsedTime > 0) {
+                  setTps(parseFloat((tokenCount / elapsedTime).toFixed(1)));
+                }
+
                 setMessages((prev) => {
                   const updated = [...prev];
                   const last = updated[updated.length - 1];
@@ -238,6 +255,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       setIsGenerating(false);
       isGeneratingRef.current = false;
       abortControllerRef.current = null;
+      // Opcional: si quieres que el indicador desaparezca al terminar, descomenta la siguiente línea:
+      // setTps(null);
     }
   };
 
