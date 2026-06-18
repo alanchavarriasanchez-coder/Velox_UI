@@ -7,9 +7,10 @@ interface SidebarProps {
   currentSessionId: string | null;
   onNewChat: () => void;
   onSelectSession: (sessionId: string) => void;
+  onDeleteSession: (sessionId: string) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ sessions, currentSessionId, onNewChat, onSelectSession }) => {
+const Sidebar: React.FC<SidebarProps> = ({ sessions, currentSessionId, onNewChat, onSelectSession, onDeleteSession }) => {
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-neutral-800/60 bg-neutral-950">
       {/* Brand */}
@@ -43,7 +44,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sessions, currentSessionId, onNewChat
       <nav className="flex-1 overflow-y-auto px-3 pb-2">
         <ul className="flex flex-col gap-0.5">
           {sessions.map((session) => (
-            <li key={session.id}>
+            <li key={session.id} className="group relative">
               <button
                 type="button"
                 onClick={() => onSelectSession(session.id)}
@@ -55,6 +56,17 @@ const Sidebar: React.FC<SidebarProps> = ({ sessions, currentSessionId, onNewChat
               >
                 <MessageSquare className="size-3.5 shrink-0 text-neutral-600" />
                 <span className="truncate font-mono text-xs">{session.title}</span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteSession(session.id);
+                }}
+                className="absolute right-1 top-1/2 -translate-y-1/2 flex size-5 items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-neutral-700 text-neutral-500 hover:text-neutral-200"
+                aria-label="Eliminar conversación"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </li>
           ))}

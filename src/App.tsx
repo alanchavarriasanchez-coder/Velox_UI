@@ -137,6 +137,41 @@ export default function App() {
     }
   }, [sessions, currentSession]);
 
+  const handleDeleteSession = useCallback(async (sessionId: string) => {
+    // Remove file from disk
+    try {
+      const filePath = await join('chats', `${sessionId}.json`);
+      await remove(filePath, { baseDir: BaseDirectory.AppData });
+    } catch (err) {
+      console.error('Error deleting session file:', err);
+    }
+
+    // Update state
+    const updatedSessions = sessions.filter((s) => s.id !== sessionId);
+    setSessions(updatedSessions);
+
+    // If the deleted session was the current one, select another
+    if (sessionId === currentSessionId) {
+      if (updatedSessions.length > 0) {
+        // Select the most recent
+        const sorted = [...updatedSessions].sort((a, b) => b.updatedAt - a.updatedAt);
+        setCurrentSessionId(sorted[0].id);
+      } else {
+        // Create a new default session
+        const defaultSession: ChatSession = {
+          id: crypto.randomUUID(),
+          title: 'Nuevo Chat',
+          messages: [{ role: 'assistant', content: '¡Hola! Soy VeloxUI. ¿En qué puedo ayudarte?' }],
+          updatedAt: Date.now(),
+        };
+        setSessions([defaultSession]);
+        setCurrentSessionId(defaultSession.id);
+        // Persist immediately
+        saveSessions([defaultSession]);
+      }
+    }
+  }, [sessions, currentSessionId]);
+
   const currentSession = sessions.find((s) => s.id === currentSessionId) ?? null;
 
   const setMessagesForCurrentSession = useCallback(
@@ -171,6 +206,7 @@ export default function App() {
         currentSessionId={currentSessionId}
         onNewChat={handleNewChat}
         onSelectSession={handleSelectSession}
+        onDeleteSession={handleDeleteSession}
       />
       <ChatArea
         messages={currentSession?.messages ?? []}
