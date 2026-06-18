@@ -87,6 +87,21 @@ export default function App() {
   const [showSplash, setShowSplash] = useState(true);
   const isFirstRender = useRef(true);
 
+  // --- IP persistente para backend ---
+  const [backendIp, setBackendIp] = useState<string>(() => {
+    // Intenta leer la IP guardada previamente, si no existe usa localhost por defecto
+    return localStorage.getItem('veloxui_backend_ip') || 'localhost';
+  });
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Función para actualizar la IP y persistirla
+  const handleSaveSettings = (newIp: string) => {
+    setBackendIp(newIp);
+    localStorage.setItem('veloxui_backend_ip', newIp);
+    setIsSettingsOpen(false);
+  };
+  // -----------------------------------
+
   const currentSession = sessions.find((s) => s.id === currentSessionId) ?? null;
 
   // Cargar sesiones al montar la aplicación
