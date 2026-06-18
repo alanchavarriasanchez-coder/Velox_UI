@@ -48,6 +48,8 @@ function parseMessageContent(content: string): { thinkingText: string; finalText
 const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages }) => {
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [availableModels, setAvailableModels] = useState<{ id: string; size_mb: number }[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>('');
   const assistantIndexRef = useRef<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -63,6 +65,28 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages }) => {
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   }, [input]);
+
+  // Fetch available models from the backend on mount
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const res = await fetch('http://localhost:8000/v1/models');
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        const json = await res.json();
+        const models: { id: string; size_mb: number }[] = json.data ?? [];
+        const active: string = json.active_model ?? '';
+        setAvailableModels(models);
+        if (active) {
+          setSelectedModel(active);
+        } else if (models.length > 0) {
+          setSelectedModel(models[0].id);
+        }
+      } catch (err) {
+        console.error('Error fetching models:', err);
+      }
+    };
+    fetchModels();
+  }, []);
 
   const handleSend = async () => {
     const trimmed = input.trim();
@@ -85,7 +109,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'openvino-genai',
+          model: selectedModel,
           messages: [...messages, userMessage],
           stream: true,
         }),
@@ -205,14 +229,19 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages }) => {
         {/* Model selector */}
         <div className="relative">
           <select
-            value="deepseek-r1-14b"
-            onChange={() => {}}
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
             className="cursor-pointer appearance-none rounded-lg border border-neutral-800 bg-neutral-900 py-1.5 pl-3 pr-9 text-sm text-neutral-100 outline-none transition-colors hover:border-neutral-700 focus:border-neutral-600"
             aria-label="Seleccionar modelo"
           >
-            <option value="deepseek-r1-14b" className="bg-neutral-900">DeepSeek-R1 · 14B</option>
-            <option value="qwen2.5-coder-7b" className="bg-neutral-900">Qwen 2.5 Coder · 7B</option>
-            <option value="llama3.1-8b" className="bg-neutral-900">Llama 3.1 · 8B</option>
+            {availableModels.length === 0 && (
+              <option value="" className="bg-neutral-900">Cargando modelos…</option>
+            )}
+            {availableModels.map((m) => (
+              <option key={m.id} value={m.id} className="bg-neutral-900">
+                {m.id} · {m.size_mb} MB
+              </option>
+            ))}
           </select>
           <ChevronRight className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 rotate-90 text-neutral-500" />
         </div>
