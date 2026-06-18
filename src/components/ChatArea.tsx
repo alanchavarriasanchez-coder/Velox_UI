@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { ArrowUp, Square, Sparkles, User, Brain, ChevronRight, Loader2 } from 'lucide-react';
 import { Message } from '../App';
 
@@ -315,8 +317,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages }) => {
                       </div>
                     )}
 
-                    <div className="whitespace-pre-wrap text-sm leading-relaxed text-neutral-200">
-                      {finalText}
+                    <div className="text-sm leading-relaxed text-neutral-200">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {finalText}
+                      </ReactMarkdown>
                       {idx === messages.length - 1 && isGenerating && finalText && (
                         <span className="ml-0.5 inline-block animate-pulse">▍</span>
                       )}
