@@ -2,13 +2,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ArrowUp, Square, Sparkles, User, Brain, ChevronRight, Loader2 } from 'lucide-react';
+import { ArrowUp, Square, Sparkles, User, Brain, ChevronRight, Loader2, Trash2 } from 'lucide-react';
 import { Message } from '../App';
 
 interface ChatAreaProps {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   onFirstUserMessage?: (userMessage: string) => void;
+  onDeleteCurrentSession?: () => void;
 }
 
 // Función auxiliar para extraer el contenido de pensamiento y el texto final
@@ -47,7 +48,7 @@ function parseMessageContent(content: string): { thinkingText: string; finalText
   };
 }
 
-const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession }) => {
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [availableModels, setAvailableModels] = useState<{ id: string; size_mb: number }[]>([]);
@@ -271,15 +272,34 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           <ChevronRight className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 rotate-90 text-neutral-500" />
         </div>
 
-        {/* Hardware status */}
-        <div className="flex items-center gap-2 rounded-lg border border-neutral-800/60 bg-neutral-900/40 px-3 py-1.5">
-          <span className="relative flex size-2">
-            <span className="absolute inline-flex size-full rounded-full animate-ping bg-emerald-400/60" />
-            <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
-          </span>
-          <span className="font-mono text-xs text-neutral-400">
-            Dispositivo: <span className="text-neutral-200">GPU Intel Arc</span>
-          </span>
+        {/* Right side actions */}
+        <div className="flex items-center gap-2.5">
+          {/* Hardware status */}
+          <div className="flex items-center gap-2 rounded-lg border border-neutral-800/60 bg-neutral-900/40 px-3 py-1.5">
+            <span className="relative flex size-2">
+              <span className="absolute inline-flex size-full rounded-full animate-ping bg-emerald-400/60" />
+              <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
+            </span>
+            <span className="font-mono text-xs text-neutral-400">
+              Dispositivo: <span className="text-neutral-200">GPU Intel Arc</span>
+            </span>
+          </div>
+
+          {/* Delete current session button */}
+          {onDeleteCurrentSession && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm('¿Estás seguro de que deseas eliminar esta conversación de tu disco local?')) {
+                  onDeleteCurrentSession();
+                }
+              }}
+              className="flex size-8 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-neutral-400 transition-colors hover:border-red-900/50 hover:bg-red-950/20 hover:text-red-400"
+              title="Eliminar conversación"
+            >
+              <Trash2 className="size-4" />
+            </button>
+          )}
         </div>
       </header>
 
