@@ -343,19 +343,30 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages }) => {
                             </strong>
                           ),
                           code: ({ className, children, inline }) => {
-                            // Si es código en línea
+                            // Código en línea
                             if (inline) {
                               return (
-                                <code className="bg-neutral-900 px-1 rounded text-emerald-400 font-mono text-xs">
+                                <code className="bg-neutral-800 px-1 rounded font-mono text-emerald-300">
                                   {children}
                                 </code>
                               );
                             }
+
                             // Bloque de código completo
+                            const match = /language-(\w+)/.exec(className || '');
+                            const language = match ? match[1] : '';
+
                             return (
-                              <pre className="bg-neutral-950 border border-neutral-800 rounded-lg p-4 overflow-x-auto font-mono text-xs text-neutral-300">
-                                <code>{children}</code>
-                              </pre>
+                              <div className="my-2 rounded-lg bg-neutral-950 border border-neutral-800 overflow-hidden">
+                                {language && (
+                                  <div className="px-3 py-1 bg-neutral-900 text-neutral-400 text-xs font-mono border-b border-neutral-800">
+                                    {language}
+                                  </div>
+                                )}
+                                <pre className="p-4 overflow-x-auto text-emerald-400">
+                                  <code>{children}</code>
+                                </pre>
+                              </div>
                             );
                           },
                         }}
