@@ -1,9 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import SplashScreen from './components/SplashScreen';
 import { writeTextFile, readTextFile, BaseDirectory } from '@tauri-apps/plugin-fs';
-import { appDataDir } from '@tauri-apps/plugin-path';
 
 export interface Message {
   role: 'user' | 'assistant';
@@ -37,6 +36,7 @@ export default function App() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [showSplash, setShowSplash] = useState(true);
+  const isFirstRender = useRef(true);
 
   // Cargar sesiones al montar
   useEffect(() => {
@@ -57,19 +57,22 @@ export default function App() {
         };
         setSessions([defaultSession]);
         setCurrentSessionId(defaultSession.id);
-        await saveSessions([defaultSession]);
       }
     })();
   }, []);
 
-  // Persistir cada vez que cambien las sesiones
+  // Persistir cada vez que cambien las sesiones (excepto la primera carga)
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     if (sessions.length > 0) {
       saveSessions(sessions);
     }
   }, [sessions]);
 
-  const handleNewChat = useCallback(async () => {
+  const handleNewChat = useCallback(() => {
     const newSession: ChatSession = {
       id: crypto.randomUUID(),
       title: 'Nuevo Chat',
@@ -79,7 +82,6 @@ export default function App() {
     const updated = [...sessions, newSession];
     setSessions(updated);
     setCurrentSessionId(newSession.id);
-    await saveSessions(updated);
   }, [sessions]);
 
   const handleSelectSession = useCallback((sessionId: string) => {
@@ -89,11 +91,12 @@ export default function App() {
   const currentSession = sessions.find((s) => s.id === currentSessionId) ?? null;
 
   const setMessagesForCurrentSession = useCallback(
-    (messages: Message[]) => {
+    (value: Message[] | ((prev: Message[]) => Message[])) => {
       if (!currentSession) return;
+      const newMessages = typeof value === 'function' ? value(currentSession.messages) : value;
       const updatedSessions = sessions.map((s) =>
         s.id === currentSession.id
-          ? { ...s, messages, updatedAt: Date.now() }
+          ? { ...s, messages: newMessages, updatedAt: Date.now() }
           : s
       );
       setSessions(updatedSessions);
