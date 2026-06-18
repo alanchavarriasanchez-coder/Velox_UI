@@ -396,28 +396,36 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
                               {children}
                             </strong>
                           ),
-                          code: ({ className, children, inline }) => {
-                            // Código en línea
-                            if (inline) {
+                          // REVISIÓN V10: Desenvolvemos el <pre> por defecto para evitar doble estructura bloque
+                          pre: ({ children }) => children,
+                          
+                          // REVISIÓN V10: Adaptación del componente code sin la propiedad 'inline'
+                          code: ({ className, children, ...props }) => {
+                            const match = /language-(\w+)/.exec(className || '');
+                            const contentString = String(children);
+                            
+                            // Si no tiene clase de lenguaje Y no contiene saltos de línea, es un formato inline (dentro de un <p>)
+                            const isInline = !match && !contentString.includes('\n');
+
+                            if (isInline) {
                               return (
-                                <code className="bg-neutral-800 px-1 rounded font-mono text-emerald-300">
+                                <code className="bg-neutral-800 px-1 rounded font-mono text-emerald-300 text-xs">
                                   {children}
                                 </code>
                               );
                             }
 
-                            // Bloque de código completo
-                            const match = /language-(\w+)/.exec(className || '');
+                            // De lo contrario, es un bloque de código estructural seguro fuera de <p>
                             const language = match ? match[1] : '';
 
                             return (
-                              <div className="my-2 rounded-lg bg-neutral-950 border border-neutral-800 overflow-hidden">
+                              <div className="my-2 rounded-lg bg-neutral-950 border border-neutral-800 overflow-hidden w-full">
                                 {language && (
                                   <div className="px-3 py-1 bg-neutral-900 text-neutral-400 text-xs font-mono border-b border-neutral-800">
                                     {language}
                                   </div>
                                 )}
-                                <pre className="p-4 overflow-x-auto text-emerald-400">
+                                <pre className="p-4 overflow-x-auto text-emerald-400 font-mono text-sm">
                                   <code>{children}</code>
                                 </pre>
                               </div>
