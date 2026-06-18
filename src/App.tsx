@@ -87,6 +87,10 @@ export default function App() {
   const [showSplash, setShowSplash] = useState(true);
   const isFirstRender = useRef(true);
 
+  // --- Sidebar colapsable en móviles ---
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // --------------------------------------
+
   // --- IP persistente para backend ---
   const [backendIp, setBackendIp] = useState<string>(() => {
     // Intenta leer la IP guardada previamente, si no existe usa localhost por defecto
@@ -241,15 +245,30 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-neutral-900 text-white flex">
-      <Sidebar
-        sessions={sessions}
-        currentSessionId={currentSessionId}
-        onNewChat={handleNewChat}
-        onSelectSession={handleSelectSession}
-        onDeleteSession={handleDeleteSession}
-        onOpenSettings={() => setIsSettingsOpen(true)}  // <-- Pasa la función
-      />
+    <div className="h-screen w-screen overflow-hidden bg-neutral-900 text-white flex relative">
+      {/* Sidebar responsivo */}
+      <div className={`${isSidebarOpen ? 'flex' : 'hidden'} md:flex absolute md:relative z-40 h-full w-64`}>
+        <Sidebar
+          sessions={sessions}
+          currentSessionId={currentSessionId}
+          onNewChat={handleNewChat}
+          onSelectSession={(id) => {
+            handleSelectSession(id);
+            setIsSidebarOpen(false);
+          }}
+          onDeleteSession={handleDeleteSession}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+        />
+      </div>
+
+      {/* Fondo oscuro para cerrar menú en móvil */}
+      {isSidebarOpen && (
+        <div
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 bg-black/40 z-30 md:hidden"
+        />
+      )}
+
       <ChatArea
         messages={currentSession?.messages ?? []}
         setMessages={setMessagesForCurrentSession}
@@ -257,6 +276,7 @@ export default function App() {
         // CORRECCIÓN: Inyección del callback para disparar el borrado del chat actual desde el Header
         onDeleteCurrentSession={() => currentSessionId && handleDeleteSession(currentSessionId)}
         backendIp={backendIp}  // <-- Pasamos la IP actual
+        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} // <-- Nuevo prop para abrir/cerrar menú
       />
 
       {/* Modal de configuración de IP - Rediseñado */}

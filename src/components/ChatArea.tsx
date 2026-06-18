@@ -11,6 +11,7 @@ interface ChatAreaProps {
   onFirstUserMessage?: (userMessage: string) => void;
   onDeleteCurrentSession?: () => void;
   backendIp: string;  // <-- Nueva prop para IP dinámica
+  onToggleSidebar?: () => void; // <-- Nuevo prop para abrir/cerrar sidebar en móvil
 }
 
 // Función auxiliar para extraer el contenido de pensamiento y el texto final
@@ -49,7 +50,7 @@ function parseMessageContent(content: string): { thinkingText: string; finalText
   };
 }
 
-const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendIp }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendIp, onToggleSidebar }) => {
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   // REVISIÓN: Estado para medir la velocidad de la IA
@@ -275,24 +276,38 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     <div className="flex h-full flex-1 flex-col overflow-hidden bg-neutral-950">
       {/* Header */}
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-800/60 bg-neutral-950/80 px-4 backdrop-blur">
-        {/* Model selector */}
-        <div className="relative">
-          <select
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            className="cursor-pointer appearance-none rounded-lg border border-neutral-800 bg-neutral-900 py-1.5 pl-3 pr-9 text-sm text-neutral-100 outline-none transition-colors hover:border-neutral-700 focus:border-neutral-600"
-            aria-label="Seleccionar modelo"
-          >
-            {availableModels.length === 0 && (
-              <option value="" className="bg-neutral-900">Cargando modelos…</option>
-            )}
-            {availableModels.map((m) => (
-              <option key={m.id} value={m.id} className="bg-neutral-900">
-                {m.id} · {m.size_mb} MB
-              </option>
-            ))}
-          </select>
-          <ChevronRight className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 rotate-90 text-neutral-500" />
+        {/* Left side: Menu button (mobile only) + Model selector */}
+        <div className="flex items-center gap-2">
+          {onToggleSidebar && (
+            <button
+              onClick={onToggleSidebar}
+              className="md:hidden flex items-center justify-center size-8 rounded-lg border border-neutral-800 bg-neutral-900 text-neutral-400 hover:text-neutral-200 transition-colors"
+              aria-label="Abrir menú"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 8h16M4 16h16" />
+              </svg>
+            </button>
+          )}
+          {/* Model selector */}
+          <div className="relative">
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="cursor-pointer appearance-none rounded-lg border border-neutral-800 bg-neutral-900 py-1.5 pl-3 pr-9 text-sm text-neutral-100 outline-none transition-colors hover:border-neutral-700 focus:border-neutral-600"
+              aria-label="Seleccionar modelo"
+            >
+              {availableModels.length === 0 && (
+                <option value="" className="bg-neutral-900">Cargando modelos…</option>
+              )}
+              {availableModels.map((m) => (
+                <option key={m.id} value={m.id} className="bg-neutral-900">
+                  {m.id} · {m.size_mb} MB
+                </option>
+              ))}
+            </select>
+            <ChevronRight className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 rotate-90 text-neutral-500" />
+          </div>
         </div>
 
         {/* Right side actions */}
