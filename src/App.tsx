@@ -256,6 +256,7 @@ export default function App() {
         onFirstUserMessage={handleFirstUserMessage}
         // CORRECCIÓN: Inyección del callback para disparar el borrado del chat actual desde el Header
         onDeleteCurrentSession={() => currentSessionId && handleDeleteSession(currentSessionId)}
+        backendIp={backendIp}  // <-- Pasamos la IP actual
       />
 
       {/* Modal de configuración de IP */}

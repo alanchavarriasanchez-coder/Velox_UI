@@ -10,6 +10,7 @@ interface ChatAreaProps {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   onFirstUserMessage?: (userMessage: string) => void;
   onDeleteCurrentSession?: () => void;
+  backendIp: string;  // <-- Nueva prop para IP dinámica
 }
 
 // Función auxiliar para extraer el contenido de pensamiento y el texto final
@@ -48,7 +49,7 @@ function parseMessageContent(content: string): { thinkingText: string; finalText
   };
 }
 
-const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendIp }) => {
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   // REVISIÓN: Estado para medir la velocidad de la IA
@@ -76,7 +77,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   useEffect(() => {
     const fetchModels = async () => {
       try {
-        const res = await fetch('http://localhost:8000/v1/models');
+        const res = await fetch(`http://${backendIp}:8000/v1/models`);
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         let json: any;
         if (res.body) {
@@ -118,7 +119,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       }
     };
     fetchModels();
-  }, []);
+  }, [backendIp]); // <-- Depende de backendIp para re-fetch si cambia la IP
 
   const handleSend = async () => {
     const trimmed = input.trim();
@@ -156,7 +157,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     abortControllerRef.current = controller;
 
     try {
-      const response = await fetch('http://localhost:8000/v1/chat/completions', {
+      const response = await fetch(`http://${backendIp}:8000/v1/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
