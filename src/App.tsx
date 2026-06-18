@@ -5,6 +5,10 @@ import SplashScreen from './components/SplashScreen';
 import { appDataDir, join } from '@tauri-apps/api/path';
 import { BaseDirectory, writeTextFile, readTextFile, mkdir, exists, remove, readDir } from '@tauri-apps/plugin-fs';
 
+function isTauri(): boolean {
+  return typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__ !== undefined;
+}
+
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -18,6 +22,10 @@ export interface ChatSession {
 }
 
 async function loadSessions(): Promise<ChatSession[]> {
+  if (!isTauri()) {
+    // No Tauri environment, return empty sessions (or mock data)
+    return [];
+  }
   try {
     // Ensure chats folder exists
     const chatsDir = 'chats';
@@ -48,6 +56,10 @@ async function loadSessions(): Promise<ChatSession[]> {
 }
 
 async function saveSessions(sessions: ChatSession[]): Promise<void> {
+  if (!isTauri()) {
+    // No Tauri environment, skip saving
+    return;
+  }
   const chatsDir = 'chats';
   // Ensure directory exists
   const dirExists = await exists(chatsDir, { baseDir: BaseDirectory.AppData });
@@ -140,12 +152,14 @@ export default function App() {
   }, [sessions, currentSession]);
 
   const handleDeleteSession = useCallback(async (sessionId: string) => {
-    // Remove file from disk
-    try {
-      const filePath = await join('chats', `${sessionId}.json`);
-      await remove(filePath, { baseDir: BaseDirectory.AppData });
-    } catch (err) {
-      console.error('Error deleting session file:', err);
+    // Remove file from disk (only in Tauri environment)
+    if (isTauri()) {
+      try {
+        const filePath = await join('chats', `${sessionId}.json`);
+        await remove(filePath, { baseDir: BaseDirectory.AppData });
+      } catch (err) {
+        console.error('Error deleting session file:', err);
+      }
     }
 
     // Update state
