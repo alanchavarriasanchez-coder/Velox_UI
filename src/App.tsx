@@ -174,8 +174,6 @@ export default function App() {
     }
   }, [sessions, currentSessionId]);
 
-  const currentSession = sessions.find((s) => s.id === currentSessionId) ?? null;
-
   const setMessagesForCurrentSession = useCallback(
     (value: Message[] | ((prev: Message[]) => Message[])) => {
       if (!currentSession) return;
