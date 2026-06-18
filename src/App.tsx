@@ -72,8 +72,6 @@ export default function App() {
   const [showSplash, setShowSplash] = useState(true);
   const isFirstRender = useRef(true);
 
-  const currentSession = sessions.find((s) => s.id === currentSessionId) ?? null;
-
   // Cargar sesiones al montar
   useEffect(() => {
     (async () => {
