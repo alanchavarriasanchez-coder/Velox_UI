@@ -342,6 +342,22 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages }) => {
                               {children}
                             </strong>
                           ),
+                          code: ({ className, children, inline }) => {
+                            // Si es código en línea
+                            if (inline) {
+                              return (
+                                <code className="bg-neutral-900 px-1 rounded text-emerald-400 font-mono text-xs">
+                                  {children}
+                                </code>
+                              );
+                            }
+                            // Bloque de código completo
+                            return (
+                              <pre className="bg-neutral-950 border border-neutral-800 rounded-lg p-4 overflow-x-auto font-mono text-xs text-neutral-300">
+                                <code>{children}</code>
+                              </pre>
+                            );
+                          },
                         }}
                       >
                         {finalText}
