@@ -127,7 +127,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
 
     const userMessage: Message = { role: 'user', content: trimmed };
 
-    // Optimistic update: añadir mensaje del usuario inmediatamente
+    // Optimistic update: añadir mensaje del usuario inmediatamente (usando sintaxis funcional)
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsGenerating(true);
