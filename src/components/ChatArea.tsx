@@ -318,7 +318,32 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages }) => {
                     )}
 
                     <div className="text-sm leading-relaxed text-neutral-200">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          ul: ({ children }) => (
+                            <ul className="list-disc pl-5 my-2">{children}</ul>
+                          ),
+                          ol: ({ children }) => (
+                            <ol className="list-decimal pl-5 my-2">{children}</ol>
+                          ),
+                          a: ({ href, children }) => (
+                            <a
+                              href={href}
+                              className="text-emerald-400 hover:underline"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              {children}
+                            </a>
+                          ),
+                          strong: ({ children }) => (
+                            <strong className="font-semibold text-neutral-100">
+                              {children}
+                            </strong>
+                          ),
+                        }}
+                      >
                         {finalText}
                       </ReactMarkdown>
                       {idx === messages.length - 1 && isGenerating && finalText && (
