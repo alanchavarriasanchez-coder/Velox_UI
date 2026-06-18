@@ -74,7 +74,33 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       try {
         const res = await fetch('http://localhost:8000/v1/models');
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        const json = await res.json();
+        let json: any;
+        if (res.body) {
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let done = false;
+          while (!done) {
+            const { done: chunkDone, value } = await reader.read();
+            done = chunkDone;
+            buffer += decoder.decode(value, { stream: !done });
+          }
+          // Procesar líneas data: {...}
+          const lines = buffer.split('\n');
+          let dataLine = '';
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6).trim();
+              if (data === '[DONE]') continue;
+              dataLine = data; // tomar la última línea data
+            }
+          }
+          const jsonStr = dataLine || buffer;
+          json = JSON.parse(jsonStr);
+        } else {
+          // fallback si el cuerpo no es legible como stream
+          json = await res.json();
+        }
         const models: { id: string; size_mb: number }[] = json.data ?? [];
         const active: string = json.active_model ?? '';
         setAvailableModels(models);
