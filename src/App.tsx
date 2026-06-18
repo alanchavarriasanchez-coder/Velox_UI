@@ -1,18 +1,105 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import SplashScreen from './components/SplashScreen';
+import { writeTextFile, readTextFile, BaseDirectory } from '@tauri-apps/plugin-fs';
+import { appDataDir } from '@tauri-apps/plugin-path';
 
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
 }
 
+export interface ChatSession {
+  id: string;
+  title: string;
+  messages: Message[];
+  updatedAt: number;
+}
+
+const SESSIONS_FILE = 'sessions.json';
+
+async function loadSessions(): Promise<ChatSession[]> {
+  try {
+    const data = await readTextFile(SESSIONS_FILE, { baseDir: BaseDirectory.AppData });
+    return JSON.parse(data) as ChatSession[];
+  } catch {
+    return [];
+  }
+}
+
+async function saveSessions(sessions: ChatSession[]): Promise<void> {
+  const data = JSON.stringify(sessions, null, 2);
+  await writeTextFile(SESSIONS_FILE, data, { baseDir: BaseDirectory.AppData });
+}
+
 export default function App() {
-  const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: '¡Hola! Soy VeloxUI. ¿En qué puedo ayudarte?' },
-  ]);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [showSplash, setShowSplash] = useState(true);
+
+  // Cargar sesiones al montar
+  useEffect(() => {
+    (async () => {
+      const loaded = await loadSessions();
+      setSessions(loaded);
+      // Si hay sesiones, seleccionar la más reciente
+      if (loaded.length > 0) {
+        const sorted = [...loaded].sort((a, b) => b.updatedAt - a.updatedAt);
+        setCurrentSessionId(sorted[0].id);
+      } else {
+        // Crear sesión por defecto
+        const defaultSession: ChatSession = {
+          id: crypto.randomUUID(),
+          title: 'Nuevo Chat',
+          messages: [{ role: 'assistant', content: '¡Hola! Soy VeloxUI. ¿En qué puedo ayudarte?' }],
+          updatedAt: Date.now(),
+        };
+        setSessions([defaultSession]);
+        setCurrentSessionId(defaultSession.id);
+        await saveSessions([defaultSession]);
+      }
+    })();
+  }, []);
+
+  // Persistir cada vez que cambien las sesiones
+  useEffect(() => {
+    if (sessions.length > 0) {
+      saveSessions(sessions);
+    }
+  }, [sessions]);
+
+  const handleNewChat = useCallback(async () => {
+    const newSession: ChatSession = {
+      id: crypto.randomUUID(),
+      title: 'Nuevo Chat',
+      messages: [{ role: 'assistant', content: '¡Hola! Soy VeloxUI. ¿En qué puedo ayudarte?' }],
+      updatedAt: Date.now(),
+    };
+    const updated = [...sessions, newSession];
+    setSessions(updated);
+    setCurrentSessionId(newSession.id);
+    await saveSessions(updated);
+  }, [sessions]);
+
+  const handleSelectSession = useCallback((sessionId: string) => {
+    setCurrentSessionId(sessionId);
+  }, []);
+
+  const currentSession = sessions.find((s) => s.id === currentSessionId) ?? null;
+
+  const setMessagesForCurrentSession = useCallback(
+    (messages: Message[]) => {
+      if (!currentSession) return;
+      const updatedSessions = sessions.map((s) =>
+        s.id === currentSession.id
+          ? { ...s, messages, updatedAt: Date.now() }
+          : s
+      );
+      setSessions(updatedSessions);
+    },
+    [sessions, currentSession]
+  );
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -27,8 +114,16 @@ export default function App() {
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-neutral-900 text-white flex">
-      <Sidebar messages={messages} setMessages={setMessages} />
-      <ChatArea messages={messages} setMessages={setMessages} />
+      <Sidebar
+        sessions={sessions}
+        currentSessionId={currentSessionId}
+        onNewChat={handleNewChat}
+        onSelectSession={handleSelectSession}
+      />
+      <ChatArea
+        messages={currentSession?.messages ?? []}
+        setMessages={setMessagesForCurrentSession}
+      />
     </div>
   );
 }
