@@ -152,8 +152,17 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // Add placeholder assistant message
-      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+      // Remove any trailing empty assistant message and add a new placeholder
+      setMessages(prev => {
+        const updated = [...prev];
+        // Remove any trailing empty assistant messages
+        while (updated.length > 0 && updated[updated.length - 1].role === 'assistant' && updated[updated.length - 1].content === '') {
+          updated.pop();
+        }
+        // Add new empty assistant message
+        updated.push({ role: 'assistant', content: '' });
+        return updated;
+      });
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No readable stream');
