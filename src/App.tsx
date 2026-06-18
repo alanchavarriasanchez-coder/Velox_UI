@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import SplashScreen from './components/SplashScreen';
-import { writeTextFile, readTextFile, BaseDirectory } from '@tauri-apps/plugin-fs';
+import { appDataDir, join } from '@tauri-apps/plugin-path';
+import { BaseDirectory, writeTextFile, readTextFile, mkdir, exists, remove, readDir } from '@tauri-apps/plugin-fs';
 
 export interface Message {
   role: 'user' | 'assistant';
@@ -16,20 +17,53 @@ export interface ChatSession {
   updatedAt: number;
 }
 
-const SESSIONS_FILE = 'sessions.json';
-
 async function loadSessions(): Promise<ChatSession[]> {
   try {
-    const data = await readTextFile(SESSIONS_FILE, { baseDir: BaseDirectory.AppData });
-    return JSON.parse(data) as ChatSession[];
+    // Ensure chats folder exists
+    const chatsDir = 'chats';
+    const dirExists = await exists(chatsDir, { baseDir: BaseDirectory.AppData });
+    if (!dirExists) {
+      await mkdir(chatsDir, { baseDir: BaseDirectory.AppData });
+    }
+
+    // Read directory contents
+    const entries = await readDir(chatsDir, { baseDir: BaseDirectory.AppData });
+    const sessions: ChatSession[] = [];
+
+    for (const entry of entries) {
+      if (entry.name && entry.name.endsWith('.json')) {
+        const filePath = await join(chatsDir, entry.name);
+        const data = await readTextFile(filePath, { baseDir: BaseDirectory.AppData });
+        const session = JSON.parse(data) as ChatSession;
+        sessions.push(session);
+      }
+    }
+
+    // Sort by updatedAt descending
+    sessions.sort((a, b) => b.updatedAt - a.updatedAt);
+    return sessions;
   } catch {
     return [];
   }
 }
 
 async function saveSessions(sessions: ChatSession[]): Promise<void> {
-  const data = JSON.stringify(sessions, null, 2);
-  await writeTextFile(SESSIONS_FILE, data, { baseDir: BaseDirectory.AppData });
+  const chatsDir = 'chats';
+  // Ensure directory exists
+  const dirExists = await exists(chatsDir, { baseDir: BaseDirectory.AppData });
+  if (!dirExists) {
+    await mkdir(chatsDir, { baseDir: BaseDirectory.AppData });
+  }
+
+  // Write each session as its own file
+  for (const session of sessions) {
+    const filePath = await join(chatsDir, `${session.id}.json`);
+    const data = JSON.stringify(session, null, 2);
+    await writeTextFile(filePath, data, { baseDir: BaseDirectory.AppData });
+  }
+
+  // Optionally remove files for sessions that no longer exist
+  // (not implemented for now)
 }
 
 export default function App() {
