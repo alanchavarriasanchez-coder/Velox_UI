@@ -51,6 +51,8 @@ function parseMessageContent(content: string): { thinkingText: string; finalText
 const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession }) => {
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  // REVISIÓN: Estado para medir la velocidad de la IA
+  const [tps, setTps] = useState<number | null>(null);
   const [availableModels, setAvailableModels] = useState<{ id: string; size_mb: number }[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
