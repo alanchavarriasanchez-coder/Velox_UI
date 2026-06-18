@@ -126,10 +126,25 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       onFirstUserMessage(trimmed);
     }
 
-    const userMessage: Message = { role: 'user', content: trimmed };
+    const userMsgId = crypto.randomUUID();
+    const assistantMsgId = crypto.randomUUID();
 
-    // Optimistic update: añadir mensaje del usuario inmediatamente (usando sintaxis funcional)
-    setMessages(prev => [...prev, userMessage]);
+    const userMsg: Message = {
+      id: userMsgId,
+      role: 'user',
+      content: trimmed,
+    } as Message;
+
+    const assistantMsg: Message = {
+      id: assistantMsgId,
+      role: 'assistant',
+      content: '',
+      reasoning: '',
+      streaming: true,
+    } as Message;
+
+    // Insertar ambos mensajes de inmediato antes de la llamada a la API
+    setMessages(prev => [...prev, userMsg, assistantMsg]);
     setInput('');
     setIsGenerating(true);
     isGeneratingRef.current = true;
@@ -143,7 +158,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: selectedModel,
-          messages: [...messages, userMessage],
+          messages: [...messages, userMsg],
           stream: true,
         }),
         signal: controller.signal,
@@ -152,18 +167,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-
-      // Remove any trailing empty assistant message and add a new placeholder
-      setMessages(prev => {
-        const updated = [...prev];
-        // Remove any trailing empty assistant messages
-        while (updated.length > 0 && updated[updated.length - 1].role === 'assistant' && updated[updated.length - 1].content === '') {
-          updated.pop();
-        }
-        // Add new empty assistant message
-        updated.push({ role: 'assistant', content: '' });
-        return updated;
-      });
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No readable stream');
