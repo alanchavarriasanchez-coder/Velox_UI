@@ -53,6 +53,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const [selectedModel, setSelectedModel] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const isGeneratingRef = useRef(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -90,7 +92,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
 
   const handleSend = async () => {
     const trimmed = input.trim();
-    if (!trimmed || isGenerating) return;
+    if (!trimmed || isGenerating || isGeneratingRef.current) return;
 
     // Renombrar el chat si es el primer mensaje del usuario
     if (onFirstUserMessage) {
@@ -103,6 +105,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsGenerating(true);
+    isGeneratingRef.current = true;
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
       const response = await fetch('http://localhost:8000/v1/chat/completions', {
@@ -111,24 +117,79 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
         body: JSON.stringify({
           model: selectedModel,
           messages: [...messages, userMessage],
-          stream: false,
+          stream: true,
         }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
-      const content: string = data?.choices?.[0]?.message?.content ?? '';
+      // Add placeholder assistant message
+      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
 
-      // Añadir mensaje del asistente después de recibir la respuesta
-      setMessages(prev => [...prev, { role: 'assistant', content }]);
-    } catch (error) {
-      console.error('Error fetching chat completion:', error);
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Error al conectar con el servidor.' }]);
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No readable stream');
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        // Keep the last incomplete line in buffer
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6).trim();
+            if (data === '[DONE]') {
+              // End of stream
+              break;
+            }
+            try {
+              const parsed = JSON.parse(data); // { choices: [{ delta: { content: "..." } }] }
+              const delta = parsed?.choices?.[0]?.delta?.content;
+              if (delta) {
+                // Update the last assistant message
+                setMessages(prev => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last && last.role === 'assistant') {
+                    updated[updated.length - 1] = { ...last, content: last.content + delta };
+                  }
+                  return updated;
+                });
+              }
+            } catch (e) {
+              // ignore parse errors
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        // User stopped generation, do nothing
+      } else {
+        console.error('Error fetching chat completion:', error);
+        // Remove the placeholder assistant message if it exists
+        setMessages(prev => {
+          const updated = [...prev];
+          if (updated.length > 0 && updated[updated.length - 1].role === 'assistant' && updated[updated.length - 1].content === '') {
+            updated.pop();
+          }
+          return updated;
+        });
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Error al conectar con el servidor.' }]);
+      }
     } finally {
       setIsGenerating(false);
+      isGeneratingRef.current = false;
+      abortControllerRef.current = null;
     }
   };
 
@@ -368,7 +429,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
             {isGenerating ? (
               <button
                 type="button"
-                onClick={() => setIsGenerating(false)}
+                onClick={() => {
+                  if (abortControllerRef.current) {
+                    abortControllerRef.current.abort();
+                  }
+                  setIsGenerating(false);
+                }}
                 className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-neutral-800 text-neutral-200 transition-colors hover:bg-neutral-700"
                 aria-label="Detener generación"
               >
