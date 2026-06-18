@@ -192,16 +192,18 @@ export default function App() {
 
   const setMessagesForCurrentSession = useCallback(
     (value: Message[] | ((prev: Message[]) => Message[])) => {
-      if (!currentSession) return;
-      const newMessages = typeof value === 'function' ? value(currentSession.messages) : value;
-      const updatedSessions = sessions.map((s) =>
-        s.id === currentSession.id
-          ? { ...s, messages: newMessages, updatedAt: Date.now() }
-          : s
-      );
-      setSessions(updatedSessions);
+      setSessions((prevSessions) => {
+        const current = prevSessions.find((s) => s.id === currentSessionId);
+        if (!current) return prevSessions;
+        const newMessages = typeof value === 'function' ? value(current.messages) : value;
+        return prevSessions.map((s) =>
+          s.id === currentSessionId
+            ? { ...s, messages: newMessages, updatedAt: Date.now() }
+            : s
+        );
+      });
     },
-    [sessions, currentSession]
+    [currentSessionId]
   );
 
   useEffect(() => {
