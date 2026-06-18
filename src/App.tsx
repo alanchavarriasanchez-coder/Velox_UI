@@ -12,6 +12,8 @@ function isTauri(): boolean {
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
+  reasoning?: string;
+  streaming?: boolean;
 }
 
 export interface ChatSession {
