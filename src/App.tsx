@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import SplashScreen from './components/SplashScreen';
-import { appDataDir, join } from '@tauri-apps/plugin-path';
+import { appDataDir, join } from '@tauri-apps/api/path';
 import { BaseDirectory, writeTextFile, readTextFile, mkdir, exists, remove, readDir } from '@tauri-apps/plugin-fs';
 
 export interface Message {
