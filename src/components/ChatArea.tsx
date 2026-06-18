@@ -119,10 +119,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const text = await response.text();
+      const data = await response.json();
+      const content: string = data?.choices?.[0]?.message?.content ?? '';
 
       // Añadir mensaje del asistente después de recibir la respuesta
-      setMessages(prev => [...prev, { role: 'assistant', content: text }]);
+      setMessages(prev => [...prev, { role: 'assistant', content }]);
     } catch (error) {
       console.error('Error fetching chat completion:', error);
       setMessages(prev => [...prev, { role: 'assistant', content: 'Error al conectar con el servidor.' }]);
