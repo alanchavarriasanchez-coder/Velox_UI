@@ -113,13 +113,20 @@ export default function App() {
     })();
   }, []);
 
-  // Persistir cada vez que cambien las sesiones (excepto la primera carga)
+  // Persistir cada vez que cambien las sesiones (excepto la primera carga o durante streaming)
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
-    if (sessions.length > 0) {
+
+    // REVISIÓN: Evitamos saturar el disco duro interceptando si algún mensaje está en streaming
+    const isAnyMessageStreaming = sessions.some((s) =>
+      s.messages.some((m) => m.streaming)
+    );
+
+    // Solo guardamos si hay sesiones y NINGUNA está generando texto activamente
+    if (sessions.length > 0 && !isAnyMessageStreaming) {
       saveSessions(sessions);
     }
   }, [sessions]);
