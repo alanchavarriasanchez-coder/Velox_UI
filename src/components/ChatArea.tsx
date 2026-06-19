@@ -56,6 +56,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const [isGenerating, setIsGenerating] = useState(false);
   // REVISIÓN: Estado para medir la velocidad de la IA
   const [tps, setTps] = useState<number | null>(null);
+  // --- Nuevo estado para tokens consumidos en la sesión actual ---
+  const [sessionUsedTokens, setSessionUsedTokens] = useState<number | null>(null);
+  // ---------------------------------------------------------------
   const [availableModels, setAvailableModels] = useState<{ id: string; size_mb: number }[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -160,6 +163,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     setIsGenerating(true);
     isGeneratingRef.current = true;
 
+    // Reiniciar el contador de tokens consumidos para esta respuesta
+    setSessionUsedTokens(null);
+
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
@@ -212,6 +218,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
             }
             try {
               const parsed = JSON.parse(data);
+
+              // INTERCEPTOR DE TELEMETRÍA
+              if (parsed.usage) {
+                const { total_tokens } = parsed.usage;
+                if (total_tokens !== undefined) {
+                  setSessionUsedTokens(total_tokens);
+                }
+              }
+
               const delta = parsed?.choices?.[0]?.delta?.content;
               if (delta) {
                 // REVISIÓN: Inicializar el temporizador en el primer token real
@@ -320,7 +335,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
 
         {/* Right side actions */}
         <div className="flex items-center gap-2.5">
-          {/* Hardware status */}
+          {/* Hardware status + telemetría */}
           <div className="flex items-center gap-2 rounded-lg border border-neutral-800/60 bg-neutral-900/40 px-3 py-1.5">
             <span className="relative flex size-2">
               <span className="absolute inline-flex size-full rounded-full animate-ping bg-emerald-400/60" />
@@ -340,6 +355,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
             {maxTokens && (
               <span className="ml-2 border-l border-neutral-800 pl-2 font-mono text-xs text-neutral-400">
                 {maxTokens} tok
+              </span>
+            )}
+            {/* Muestra los tokens consumidos en esta sesión */}
+            {sessionUsedTokens !== null && (
+              <span className="ml-2 border-l border-neutral-800 pl-2 font-mono text-xs text-amber-400">
+                {sessionUsedTokens} used
               </span>
             )}
           </div>
