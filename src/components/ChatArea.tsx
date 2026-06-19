@@ -1,5 +1,5 @@
 // Verificación: Pasos 1-6 implementados (streaming, delta, estado progresivo, parseo de <think> en tiempo real)
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ArrowUp, Square, Sparkles, User, Brain, ChevronRight, Loader2, Trash2, Menu } from 'lucide-react';
@@ -56,15 +56,21 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const [isGenerating, setIsGenerating] = useState(false);
   // REVISIÓN: Estado para medir la velocidad de la IA
   const [tps, setTps] = useState<number | null>(null);
-  // --- Nuevo estado para tokens consumidos en la sesión actual ---
+  // --- Tokens consumidos acumulados (se actualiza con cada chunk usage, nunca se reinicia en la misma sesión) ---
   const [sessionUsedTokens, setSessionUsedTokens] = useState<number | null>(null);
-  // ---------------------------------------------------------------
+  // ----------------------------------------------------------------------------------------------------
   const [availableModels, setAvailableModels] = useState<{ id: string; size_mb: number }[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isGeneratingRef = useRef(false);
+
+  // Cálculo del porcentaje de contexto usado
+  const usedTokens = sessionUsedTokens ?? 0;
+  const porcentaje = maxTokens
+    ? Math.min(Math.round((usedTokens / maxTokens) * 100), 100)
+    : 0;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -163,8 +169,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     setIsGenerating(true);
     isGeneratingRef.current = true;
 
-    // Reiniciar el contador de tokens consumidos para esta respuesta
-    setSessionUsedTokens(null);
+    // *** NO reiniciamos sessionUsedTokens aquí para mantener el total acumulado ***
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -609,6 +614,23 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           <p className="mt-2 text-center font-mono text-[11px] text-neutral-700">
             VeloxUI ejecuta modelos localmente vía Intel OpenVINO
           </p>
+          {/* Barra de progreso de contexto */}
+          {maxTokens && (
+            <div className="w-full px-0 py-1 font-mono text-[10px] text-neutral-500">
+              <div className="flex justify-between mb-1">
+                <span>Contexto del Modelo</span>
+                <span>{usedTokens.toLocaleString()} / {maxTokens.toLocaleString()} tokens ({porcentaje}%)</span>
+              </div>
+              <div className="w-full h-1 bg-neutral-800 rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-300 ${
+                    porcentaje > 85 ? 'bg-red-500' : porcentaje > 60 ? 'bg-amber-500' : 'bg-emerald-500'
+                  }`}
+                  style={{ width: `${porcentaje}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
