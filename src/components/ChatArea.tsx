@@ -51,6 +51,131 @@ function parseMessageContent(content: string): { thinkingText: string; finalText
   };
 }
 
+// Componente memorizado para cada mensaje
+const MessageItem = React.memo(({
+  msg,
+  idx,
+  isLast,
+  isGenerating
+}: {
+  msg: Message;
+  idx: number;
+  isLast: boolean;
+  isGenerating: boolean;
+}) => {
+  const isUser = msg.role === 'user';
+  const { thinkingText, finalText } = isUser
+    ? { thinkingText: '', finalText: msg.content }
+    : parseMessageContent(msg.content);
+
+  return (
+    <div className="flex gap-4 px-4 py-5">
+      {/* Avatar */}
+      <div
+        className={`flex size-7 shrink-0 items-center justify-center rounded-md border ${
+          isUser
+            ? 'border-neutral-700 bg-neutral-800 text-neutral-300'
+            : 'border-neutral-700/60 bg-neutral-900 text-emerald-400'
+        }`}
+      >
+        {isUser ? <User className="size-3.5" /> : <Sparkles className="size-3.5" />}
+      </div>
+
+      {/* Body */}
+      <div className="min-w-0 flex-1 pt-0.5">
+        <div className="mb-1.5 font-mono text-xs text-neutral-500">
+          {isUser ? 'Tú' : 'VeloxUI'}
+        </div>
+
+        {thinkingText && (
+          <div className="mb-2 overflow-hidden rounded-md border-l-2 border-neutral-700 bg-neutral-900/40">
+            <div className="flex w-full items-center gap-2 px-3 py-2 text-left">
+              {isLast && isGenerating ? (
+                <Loader2 className="size-3.5 shrink-0 animate-spin text-neutral-400" />
+              ) : (
+                <Brain className="size-3.5 shrink-0 text-neutral-500" />
+              )}
+              <span className={`font-mono text-xs ${isLast && isGenerating ? 'animate-pulse text-neutral-400' : 'text-neutral-500'}`}>
+                {isLast && isGenerating ? 'Razonando…' : 'Cadena de pensamiento'}
+              </span>
+            </div>
+            {(isLast && isGenerating) || !isGenerating ? (
+              <div className="border-t border-neutral-800/60 px-3 py-2.5">
+                <p className="whitespace-pre-wrap text-xs italic leading-relaxed text-neutral-500">
+                  {thinkingText}
+                  {isLast && isGenerating && <span className="ml-0.5 inline-block animate-pulse">▍</span>}
+                </p>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        <div className="text-sm leading-relaxed text-neutral-200">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              ul: ({ children }) => (
+                <ul className="list-disc pl-5 my-2">{children}</ul>
+              ),
+              ol: ({ children }) => (
+                <ol className="list-decimal pl-5 my-2">{children}</ol>
+              ),
+              a: ({ href, children }) => (
+                <a
+                  href={href}
+                  className="text-emerald-400 hover:underline"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {children}
+                </a>
+              ),
+              strong: ({ children }) => (
+                <strong className="font-semibold text-neutral-100">
+                  {children}
+                </strong>
+              ),
+              pre: ({ children }) => children,
+              code: ({ className, children }) => {
+                const match = /language-(\w+)/.exec(className || '');
+                const contentString = String(children);
+                const isInline = !match && !contentString.includes('\n');
+
+                if (isInline) {
+                  return (
+                    <code className="bg-neutral-800 px-1 rounded font-mono text-emerald-300 text-xs">
+                      {children}
+                    </code>
+                  );
+                }
+
+                const language = match ? match[1] : '';
+
+                return (
+                  <div className="my-2 rounded-lg bg-neutral-950 border border-neutral-800 overflow-hidden w-full">
+                    {language && (
+                      <div className="px-3 py-1 bg-neutral-900 text-neutral-400 text-xs font-mono border-b border-neutral-800">
+                        {language}
+                      </div>
+                    )}
+                    <pre className="p-4 overflow-x-auto text-emerald-400 font-mono text-sm">
+                      <code>{children}</code>
+                    </pre>
+                  </div>
+                );
+              },
+            }}
+          >
+            {finalText}
+          </ReactMarkdown>
+          {isLast && isGenerating && finalText && <span className="ml-0.5 inline-block animate-pulse">▍</span>}
+        </div>
+      </div>
+    </div>
+  );
+});
+MessageItem.displayName = 'MessageItem';
+
 const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendIp, onToggleSidebar, maxTokens }) => {
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -443,150 +568,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           </div>
         ) : (
           <div className="mx-auto max-w-3xl divide-y divide-neutral-800/40">
-            {messages.map((msg, idx) => {
-              const isUser = msg.role === 'user';
-              const { thinkingText, finalText } = isUser
-                ? { thinkingText: '', finalText: msg.content }
-                : parseMessageContent(msg.content);
-
-              return (
-                <div key={idx} className="flex gap-4 px-4 py-5">
-                  {/* Avatar */}
-                  <div
-                    className={`flex size-7 shrink-0 items-center justify-center rounded-md border ${
-                      isUser
-                        ? 'border-neutral-700 bg-neutral-800 text-neutral-300'
-                        : 'border-neutral-700/60 bg-neutral-900 text-emerald-400'
-                    }`}
-                  >
-                    {isUser ? <User className="size-3.5" /> : <Sparkles className="size-3.5" />}
-                  </div>
-
-                  {/* Body */}
-                  <div className="min-w-0 flex-1 pt-0.5">
-                    <div className="mb-1.5 font-mono text-xs text-neutral-500">
-                      {isUser ? 'Tú' : 'VeloxUI'}
-                    </div>
-
-                    {thinkingText && (
-                      <div className="mb-2 overflow-hidden rounded-md border-l-2 border-neutral-700 bg-neutral-900/40">
-                        <button
-                          type="button"
-                          onClick={() => {}}
-                          className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-neutral-800/40 ${
-                            msg.role === 'assistant' && idx === messages.length - 1 && isGenerating ? 'open' : ''
-                          }`}
-                          aria-expanded={msg.role === 'assistant' && idx === messages.length - 1 && isGenerating ? true : false}
-                        >
-                          {msg.role === 'assistant' && idx === messages.length - 1 && isGenerating ? (
-                            <Loader2 className="size-3.5 shrink-0 animate-spin text-neutral-400" />
-                          ) : (
-                            <Brain className="size-3.5 shrink-0 text-neutral-500" />
-                          )}
-                          <span
-                            className={`font-mono text-xs ${
-                              msg.role === 'assistant' && idx === messages.length - 1 && isGenerating
-                                ? 'animate-pulse text-neutral-400'
-                                : 'text-neutral-500'
-                            }`}
-                          >
-                            {msg.role === 'assistant' && idx === messages.length - 1 && isGenerating
-                              ? 'Razonando…'
-                              : 'Cadena de pensamiento'}
-                          </span>
-                          <ChevronRight
-                            className={`ml-auto size-3.5 text-neutral-600 transition-transform ${
-                              msg.role === 'assistant' && idx === messages.length - 1 && isGenerating ? 'rotate-90' : ''
-                            }`}
-                          />
-                        </button>
-
-                        {(msg.role === 'assistant' && idx === messages.length - 1 && isGenerating) || !isGenerating ? (
-                          <div className="border-t border-neutral-800/60 px-3 py-2.5">
-                            <p className="whitespace-pre-wrap text-xs italic leading-relaxed text-neutral-500">
-                              {thinkingText}
-                              {msg.role === 'assistant' && idx === messages.length - 1 && isGenerating && (
-                                <span className="ml-0.5 inline-block animate-pulse">▍</span>
-                              )}
-                            </p>
-                          </div>
-                        ) : null}
-                      </div>
-                    )}
-
-                    <div className="text-sm leading-relaxed text-neutral-200">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={{
-                          ul: ({ children }) => (
-                            <ul className="list-disc pl-5 my-2">{children}</ul>
-                          ),
-                          ol: ({ children }) => (
-                            <ol className="list-decimal pl-5 my-2">{children}</ol>
-                          ),
-                          a: ({ href, children }) => (
-                            <a
-                              href={href}
-                              className="text-emerald-400 hover:underline"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              {children}
-                            </a>
-                          ),
-                          strong: ({ children }) => (
-                            <strong className="font-semibold text-neutral-100">
-                              {children}
-                            </strong>
-                          ),
-                          // REVISIÓN V10: Desenvolvemos el <pre> por defecto para evitar doble estructura bloque
-                          pre: ({ children }) => children,
-                          
-                          // REVISIÓN V10: Adaptación del componente code sin la propiedad 'inline'
-                          // CORRECCIÓN: se eliminó ...props del destructuring ya que no se usaba
-                          code: ({ className, children }) => {
-                            const match = /language-(\w+)/.exec(className || '');
-                            const contentString = String(children);
-                            
-                            // Si no tiene clase de lenguaje Y no contiene saltos de línea, es un formato inline (dentro de un <p>)
-                            const isInline = !match && !contentString.includes('\n');
-
-                            if (isInline) {
-                              return (
-                                <code className="bg-neutral-800 px-1 rounded font-mono text-emerald-300 text-xs">
-                                  {children}
-                                </code>
-                              );
-                            }
-
-                            // De lo contrario, es un bloque de código estructural seguro fuera de <p>
-                            const language = match ? match[1] : '';
-
-                            return (
-                              <div className="my-2 rounded-lg bg-neutral-950 border border-neutral-800 overflow-hidden w-full">
-                                {language && (
-                                  <div className="px-3 py-1 bg-neutral-900 text-neutral-400 text-xs font-mono border-b border-neutral-800">
-                                    {language}
-                                  </div>
-                                )}
-                                <pre className="p-4 overflow-x-auto text-emerald-400 font-mono text-sm">
-                                  <code>{children}</code>
-                                </pre>
-                              </div>
-                            );
-                          },
-                        }}
-                      >
-                        {finalText}
-                      </ReactMarkdown>
-                      {idx === messages.length - 1 && isGenerating && finalText && (
-                        <span className="ml-0.5 inline-block animate-pulse">▍</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {messages.map((msg, idx) => (
+              <MessageItem
+                key={idx}
+                msg={msg}
+                idx={idx}
+                isLast={idx === messages.length - 1}
+                isGenerating={isGenerating}
+              />
+            ))}
           </div>
         )}
         {/* Indicador de carga mientras se genera la respuesta */}
