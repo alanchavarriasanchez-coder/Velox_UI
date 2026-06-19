@@ -321,11 +321,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (!isGenerating && input.trim()) handleSend();
+      // Permite disparar el envío con Enter si hay texto O si hay un archivo
+      if (!isGenerating && (input.trim() || attachedFile !== null)) handleSend();
     }
   };
 
-  const canSend = input.trim().length > 0 && !isGenerating;
+  const canSend = (input.trim().length > 0 || attachedFile !== null) && !isGenerating;
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden bg-neutral-950">
