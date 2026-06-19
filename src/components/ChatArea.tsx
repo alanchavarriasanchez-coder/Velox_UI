@@ -157,11 +157,18 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
 
   const handleSend = async () => {
     const trimmed = input.trim();
-    if (!trimmed || isGenerating || isGeneratingRef.current) return;
+    // Permitir enviar si hay un archivo cargado, aunque el texto del input esté vacío
+    if ((!trimmed && !attachedFile) || isGenerating || isGeneratingRef.current) return;
 
-    // Renombrar el chat si es el primer mensaje del usuario
+    // 1. Construir el contenido final inyectando el código de forma estructurada
+    let finalMessageContent = trimmed;
+    if (attachedFile) {
+      finalMessageContent = `📄 **Archivo adjunto de análisis: \`${attachedFile.name}\`**\n\n\`\`\`text\n${attachedFile.content}\n\`\`\`\n\n${trimmed}`;
+    }
+
+    // Renombrar el chat basado en la acción del usuario
     if (onFirstUserMessage) {
-      onFirstUserMessage(trimmed);
+      onFirstUserMessage(trimmed || `Análisis: ${attachedFile?.name}`);
     }
 
     const userMsgId = crypto.randomUUID();
@@ -170,7 +177,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     const userMsg: Message = {
       id: userMsgId,
       role: 'user',
-      content: trimmed,
+      content: finalMessageContent, // <--- ENVIAMOS EL TEXTO COMPLETO CON EL CÓDIGO
     } as Message;
 
     const assistantMsg: Message = {
@@ -184,6 +191,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     // Insertar ambos mensajes de inmediato antes de la llamada a la API
     setMessages(prev => [...prev, userMsg, assistantMsg]);
     setInput('');
+    setAttachedFile(null); // <--- LIMPIAR EL ADJUNTO TRAS EL ENVÍO
     setIsGenerating(true);
     isGeneratingRef.current = true;
 
