@@ -98,6 +98,9 @@ export default function App() {
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+  // --- Almacena el active_max_context_tokens del modelo activo ---
+  const [maxTokens, setMaxTokens] = useState<number>(32768); // Valor por defecto seguro
+
   // Función para actualizar la IP y persistirla
   const handleSaveSettings = (newIp: string) => {
     setBackendIp(newIp);
@@ -132,6 +135,22 @@ export default function App() {
       }
     })();
   }, []);
+
+  // Obtener telemetría del modelo activo (active_max_context_tokens)
+  useEffect(() => {
+    const fetchActiveMaxTokens = async () => {
+      try {
+        const res = await fetch(`http://${backendIp}:8000/v1/models`);
+        const data = await res.json();
+        if (data.active_max_context_tokens) {
+          setMaxTokens(data.active_max_context_tokens);
+        }
+      } catch (err) {
+        console.error('Error al obtener active_max_context_tokens', err);
+      }
+    };
+    fetchActiveMaxTokens();
+  }, [backendIp]); // Se re-ejecuta si cambia la IP
 
   // Persistir cambios en el disco duro (Evitando saturación por streaming)
   useEffect(() => {
@@ -277,6 +296,7 @@ export default function App() {
         onDeleteCurrentSession={() => currentSessionId && handleDeleteSession(currentSessionId)}
         backendIp={backendIp}  // <-- Pasamos la IP actual
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} // <-- Nuevo prop para abrir/cerrar menú
+        maxTokens={maxTokens}  // <-- Nuevo prop con el límite de contexto
       />
 
       {/* Modal de configuración de IP - Rediseñado */}

@@ -12,6 +12,7 @@ interface ChatAreaProps {
   onDeleteCurrentSession?: () => void;
   backendIp: string;  // <-- Nueva prop para IP dinámica
   onToggleSidebar?: () => void; // <-- Nuevo prop para abrir/cerrar sidebar en móvil
+  maxTokens?: number;  // <-- Nuevo prop: límite de contexto del modelo activo
 }
 
 // Función auxiliar para extraer el contenido de pensamiento y el texto final
@@ -50,7 +51,7 @@ function parseMessageContent(content: string): { thinkingText: string; finalText
   };
 }
 
-const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendIp, onToggleSidebar }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendIp, onToggleSidebar, maxTokens }) => {
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   // REVISIÓN: Estado para medir la velocidad de la IA
@@ -333,6 +334,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
             {tps !== null && (
               <span className="ml-2 border-l border-neutral-800 pl-2 font-mono text-xs text-emerald-400 animate-pulse">
                 {tps} tok/s
+              </span>
+            )}
+            {/* Muestra el límite de contexto del modelo activo */}
+            {maxTokens && (
+              <span className="ml-2 border-l border-neutral-800 pl-2 font-mono text-xs text-neutral-400">
+                {maxTokens} tok
               </span>
             )}
           </div>
