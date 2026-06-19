@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ArrowUp, Square, Sparkles, User, Brain, ChevronRight, Loader2, Trash2, Menu } from 'lucide-react';
+import { ArrowUp, Square, Sparkles, User, Brain, ChevronRight, Loader2, Trash2, Menu, Paperclip, X } from 'lucide-react';
 import { Message } from '../App';
 
 interface ChatAreaProps {
@@ -65,6 +65,24 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isGeneratingRef = useRef(false);
+
+  // --- Estados para el archivo adjunto ---
+  const [attachedFile, setAttachedFile] = useState<{ name: string; content: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Función para leer el archivo seleccionado por el usuario
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      setAttachedFile({ name: file.name, content });
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   // Cálculo del porcentaje de contexto usado
   const usedTokens = sessionUsedTokens ?? 0;
