@@ -166,6 +166,17 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       finalMessageContent = `📄 **Archivo adjunto de análisis: \`${attachedFile.name}\`**\n\n\`\`\`text\n${attachedFile.content}\n\`\`\`\n\n${trimmed}`;
     }
 
+    // Validación preventiva en el frontend para evitar congelar el backend con Repomix masivos
+    const limit = maxTokens || 32768;
+    const estimatedTokens = Math.ceil(finalMessageContent.length / 4);
+    
+    if (estimatedTokens > limit) {
+      const confirmSend = window.confirm(
+        `⚠️ El archivo o texto que intentas enviar es demasiado grande (~${estimatedTokens.toLocaleString()} tokens).\n\nEl modelo activo actual tiene un límite estricto de ${limit.toLocaleString()} tokens.\n\nSi continúas, el backend truncará severamente el código para proteger la memoria. ¿Deseas enviarlo de todas formas?`
+      );
+      if (!confirmSend) return;
+    }
+
     // Renombrar el chat basado en la acción del usuario
     if (onFirstUserMessage) {
       onFirstUserMessage(trimmed || `Análisis: ${attachedFile?.name}`);
