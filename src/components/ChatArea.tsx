@@ -599,7 +599,43 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       {/* Caja de entrada inferior */}
       <div className="shrink-0 px-4 pb-5 pt-2">
         <div className="mx-auto max-w-3xl">
+          {/* VISUALIZADOR DEL ARCHIVO ADJUNTO PREVIO AL ENVÍO */}
+          {attachedFile && (
+            <div className="mb-2 flex items-center gap-2 rounded-lg bg-neutral-900 border border-neutral-800/80 px-2.5 py-1.5 text-xs text-neutral-300 w-fit animate-fade-in font-mono shadow-md">
+              <Paperclip className="size-3.5 text-emerald-400 shrink-0" />
+              <span className="truncate max-w-[240px] text-neutral-200">{attachedFile.name}</span>
+              <button
+                type="button"
+                onClick={() => setAttachedFile(null)}
+                className="ml-1 p-0.5 rounded-full hover:bg-neutral-800 text-neutral-500 hover:text-neutral-300 transition-colors"
+                title="Remover archivo"
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+          )}
+
           <div className="flex items-end gap-2 rounded-xl border border-neutral-800 bg-neutral-900/80 p-2 shadow-lg shadow-black/20 transition-colors focus-within:border-neutral-700">
+            {/* BOTÓN NATIVO PARA ADJUNTAR ARCHIVO */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isGenerating}
+              className="flex size-8 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-neutral-200 disabled:opacity-40"
+              title="Adjuntar archivo de texto"
+            >
+              <Paperclip className="size-4" />
+            </button>
+            
+            {/* Input oculto controlado por el botón de arriba */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+              accept=".txt,.js,.ts,.tsx,.json,.py,.md,.xml,.bat,.cfg,.toml"
+            />
+
             <textarea
               ref={textareaRef}
               rows={1}
@@ -607,7 +643,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={isGenerating}
-              placeholder={isGenerating ? 'Generando respuesta…' : 'Envía un mensaje a VeloxUI…'}
+              placeholder={isGenerating ? 'Generando respuesta…' : 'Envía un mensaje o adjunta un archivo…'}
               className="max-h-[200px] flex-1 resize-none bg-transparent px-2 py-1.5 text-sm leading-relaxed text-neutral-100 outline-none placeholder:text-neutral-600 disabled:opacity-60"
             />
 
