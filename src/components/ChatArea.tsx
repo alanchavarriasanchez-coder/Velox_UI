@@ -78,7 +78,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   useEffect(() => {
     const fetchModels = async () => {
       try {
-        const res = await fetch(`http://${backendIp}:8000/v1/models`);
+        const res = await fetch(`http://${backendIp}:8000/v1/models`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Client-Name': 'VeloxUI',
+          },
+        });
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         let json: any;
         if (res.body) {
@@ -160,7 +165,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     try {
       const response = await fetch(`http://${backendIp}:8000/v1/chat/completions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Client-Name': 'VeloxUI',
+        },
         body: JSON.stringify({
           model: selectedModel,
           messages: [...messages, userMsg],
