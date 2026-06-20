@@ -4,6 +4,13 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ArrowUp, Square, Sparkles, User, Brain, ChevronRight, Loader2, Trash2, Menu, Paperclip, X } from 'lucide-react';
 import { Message } from '../App';
+import mammoth from 'mammoth';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Configurar worker de pdf.js
+if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
 
 interface ChatAreaProps {
   messages: Message[];
@@ -202,6 +209,16 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Función auxiliar para convertir ArrayBuffer a base64
+  function arrayBufferToBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  }
+
   // Función para leer el archivo seleccionado por el usuario
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -209,22 +226,53 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
 
     try {
       const buffer = await file.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
-      let binary = '';
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const dataBase64 = btoa(binary);
+      const mimeType = file.type || 'application/octet-stream';
+      const dataBase64 = arrayBufferToBase64(buffer);
 
-      // Decodificar como UTF-8 para obtener el texto de previsualización
-      const decoder = new TextDecoder('utf-8');
-      const text = decoder.decode(buffer);
+      let previewText = '';
+
+      // Detección y extracción de texto según el tipo MIME
+      if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        // .docx
+        try {
+          const result = await mammoth.extractRawText({ arrayBuffer: buffer });
+          previewText = result.value;
+        } catch (docxError) {
+          console.error('Error extrayendo texto de .docx:', docxError);
+          previewText = '[Error al extraer texto del documento Word]';
+        }
+      } else if (mimeType === 'application/pdf') {
+        // .pdf
+        try {
+          const pdfDoc = await pdfjsLib.getDocument({ data: buffer }).promise;
+          let fullText = '';
+          for (let i = 1; i <= pdfDoc.numPages; i++) {
+            const page = await pdfDoc.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map((item: any) => item.str).join(' ');
+            fullText += pageText + '\n';
+          }
+          previewText = fullText.trim();
+        } catch (pdfError) {
+          console.error('Error extrayendo texto de PDF:', pdfError);
+          previewText = '[Error al extraer texto del PDF]';
+        }
+      } else {
+        // Para texto plano y otros formatos desconocidos: decodificar como UTF-8
+        try {
+          const decoder = new TextDecoder('utf-8');
+          previewText = decoder.decode(buffer);
+        } catch (decodeError) {
+          console.error('Error decodificando archivo como texto:', decodeError);
+          previewText = '[Error al decodificar el archivo como texto]';
+        }
+      }
 
       setAttachedFile({
         name: file.name,
-        mime_type: file.type || 'application/octet-stream',
+        mime_type: mimeType,
         data_base64: dataBase64,
-        preview_text: text,
+        preview_text: previewText,
       });
     } catch (err) {
       console.error('Error reading file:', err);
@@ -658,7 +706,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
-              accept=".txt,.js,.ts,.tsx,.json,.py,.md,.xml,.bat,.cfg,.toml"
+              accept=".txt,.js,.ts,.tsx,.json,.py,.md,.xml,.bat,.cfg,.toml,.docx,.pdf"
             />
 
             <textarea
