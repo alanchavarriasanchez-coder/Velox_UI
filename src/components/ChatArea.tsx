@@ -197,6 +197,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   }
   const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [previewExpanded, setPreviewExpanded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Función auxiliar para convertir ArrayBuffer a base64
@@ -269,6 +270,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
         data_base64: dataBase64,
         preview_text: previewText,
       });
+      setPreviewExpanded(false);
       setFileError(null);
     } catch (err) {
       console.error('Error reading file:', err);
@@ -380,6 +382,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     setMessages(prev => [...prev, userMsg, assistantMsg]);
     setInput('');
     setAttachedFile(null);
+    setPreviewExpanded(false);
     setFileError(null);
     // Resetear también el input file
     if (fileInputRef.current) {
@@ -653,6 +656,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
                 onClick={() => {
                   setAttachedFile(null);
                   setFileError(null);
+                  setPreviewExpanded(false);
                   if (fileInputRef.current) fileInputRef.current.value = '';
                 }}
                 className="ml-1 p-0.5 rounded-full hover:bg-neutral-800 text-neutral-500 hover:text-neutral-300 transition-colors"
@@ -660,6 +664,25 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
               >
                 <X className="size-3" />
               </button>
+            </div>
+          )}
+          {attachedFile && attachedFile.preview_text && (
+            <div className="mb-1">
+              <button
+                type="button"
+                onClick={() => setPreviewExpanded(prev => !prev)}
+                className="text-xs text-neutral-500 hover:text-neutral-300 underline underline-offset-2"
+              >
+                {previewExpanded ? 'Ocultar vista previa' : 'Ver vista previa'}
+              </button>
+              {previewExpanded && (
+                <div className="mt-1 rounded bg-neutral-900 border border-neutral-800 p-2 text-xs text-neutral-400 whitespace-pre-wrap max-h-40 overflow-y-auto">
+                  {attachedFile.preview_text.slice(0, 500)}
+                  {attachedFile.preview_text.length > 500 && (
+                    <span className="text-neutral-600 font-mono">... ({attachedFile.preview_text.length - 500} caracteres más)</span>
+                  )}
+                </div>
+              )}
             </div>
           )}
           {fileError && (
