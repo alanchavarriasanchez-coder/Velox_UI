@@ -356,22 +356,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     // Permitir enviar si hay un archivo cargado, aunque el texto del input esté vacío
     if ((!trimmed && !attachedFile) || isGenerating || isGeneratingRef.current) return;
 
-    // 1. Construir el contenido final usando preview_text (texto plano) del archivo adjunto
-    let finalMessageContent = trimmed;
-    if (attachedFile) {
-      finalMessageContent = `📄 **Archivo adjunto de análisis: \`${attachedFile.name}\`**\n\n\`\`\`text\n${attachedFile.preview_text}\n\`\`\`\n\n${trimmed}`;
-    }
-
-    // Validación preventiva en el frontend para evitar congelar el backend con Repomix masivos
-    const limit = maxTokens || 32768;
-    const estimatedTokens = Math.ceil(finalMessageContent.length / 4);
-    
-    if (estimatedTokens > limit) {
-      const confirmSend = window.confirm(
-        `⚠️ El archivo o texto que intentas enviar es demasiado grande (~${estimatedTokens.toLocaleString()} tokens).\n\nEl modelo activo actual tiene un límite estricto de ${limit.toLocaleString()} tokens.\n\nSi continúas, el backend truncará severamente el código para proteger la memoria. ¿Deseas enviarlo de todas formas?`
-      );
-      if (!confirmSend) return;
-    }
+    // 1. Construir el contenido final solo con el texto del input (sin inyectar el archivo)
+    const finalMessageContent = trimmed;
 
     // Renombrar el chat basado en la acción del usuario
     if (onFirstUserMessage) {
@@ -384,7 +370,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     const userMsg: Message = {
       id: userMsgId,
       role: 'user',
-      content: finalMessageContent, // <--- ENVIAMOS EL TEXTO COMPLETO CON EL CÓDIGO
+      content: finalMessageContent,
     } as Message;
 
     const assistantMsg: Message = {
@@ -418,6 +404,16 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           model: selectedModel,
           messages: [...messages, userMsg],
           stream: true,
+          // Enviar archivo adjunto como campo separado
+          attachments: attachedFile
+            ? [
+                {
+                  name: attachedFile.name,
+                  mime_type: attachedFile.mime_type,
+                  data: attachedFile.data_base64,
+                },
+              ]
+            : [],
         }),
         signal: controller.signal,
       });
