@@ -192,20 +192,43 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const isGeneratingRef = useRef(false);
 
   // --- Estados para el archivo adjunto ---
-  const [attachedFile, setAttachedFile] = useState<{ name: string; content: string } | null>(null);
+  // Nueva interfaz que incluye tipo MIME, base64 y texto de previsualización
+  interface AttachedFile {
+    name: string;
+    mime_type: string;
+    data_base64: string;   // contenido completo en base64
+    preview_text: string;  // texto extraído para previsualización
+  }
+  const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Función para leer el archivo seleccionado por el usuario
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      setAttachedFile({ name: file.name, content });
-    };
-    reader.readAsText(file);
+    try {
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const dataBase64 = btoa(binary);
+
+      // Decodificar como UTF-8 para obtener el texto de previsualización
+      const decoder = new TextDecoder('utf-8');
+      const text = decoder.decode(buffer);
+
+      setAttachedFile({
+        name: file.name,
+        mime_type: file.type || 'application/octet-stream',
+        data_base64: dataBase64,
+        preview_text: text,
+      });
+    } catch (err) {
+      console.error('Error reading file:', err);
+    }
     e.target.value = '';
   };
 
@@ -285,10 +308,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     // Permitir enviar si hay un archivo cargado, aunque el texto del input esté vacío
     if ((!trimmed && !attachedFile) || isGenerating || isGeneratingRef.current) return;
 
-    // 1. Construir el contenido final inyectando el código de forma estructurada
+    // 1. Construir el contenido final usando preview_text (texto plano) del archivo adjunto
     let finalMessageContent = trimmed;
     if (attachedFile) {
-      finalMessageContent = `📄 **Archivo adjunto de análisis: \`${attachedFile.name}\`**\n\n\`\`\`text\n${attachedFile.content}\n\`\`\`\n\n${trimmed}`;
+      finalMessageContent = `📄 **Archivo adjunto de análisis: \`${attachedFile.name}\`**\n\n\`\`\`text\n${attachedFile.preview_text}\n\`\`\`\n\n${trimmed}`;
     }
 
     // Validación preventiva en el frontend para evitar congelar el backend con Repomix masivos
