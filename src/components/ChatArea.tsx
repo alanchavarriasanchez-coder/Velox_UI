@@ -17,9 +17,9 @@ interface ChatAreaProps {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   onFirstUserMessage?: (userMessage: string) => void;
   onDeleteCurrentSession?: () => void;
-  backendIp: string;  // <-- Nueva prop para IP dinámica
-  onToggleSidebar?: () => void; // <-- Nuevo prop para abrir/cerrar sidebar en móvil
-  maxTokens?: number;  // <-- Nuevo prop: límite de contexto del modelo activo
+  backendIp: string;
+  onToggleSidebar?: () => void;
+  maxTokens?: number;
 }
 
 // Función auxiliar para extraer el contenido de pensamiento y el texto final
@@ -186,11 +186,8 @@ MessageItem.displayName = 'MessageItem';
 const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendIp, onToggleSidebar, maxTokens }) => {
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  // REVISIÓN: Estado para medir la velocidad de la IA
   const [tps, setTps] = useState<number | null>(null);
-  // --- Tokens consumidos acumulados (se actualiza con cada chunk usage, nunca se reinicia en la misma sesión) ---
   const [sessionUsedTokens, setSessionUsedTokens] = useState<number | null>(null);
-  // ----------------------------------------------------------------------------------------------------
   const [availableModels, setAvailableModels] = useState<{ id: string; size_mb: number }[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -199,14 +196,14 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const isGeneratingRef = useRef(false);
 
   // --- Estados para el archivo adjunto ---
-  // Nueva interfaz que incluye tipo MIME, base64 y texto de previsualización
   interface AttachedFile {
     name: string;
     mime_type: string;
-    data_base64: string;   // contenido completo en base64
-    preview_text: string;  // texto extraído para previsualización
+    data_base64: string;
+    preview_text: string;
   }
   const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Función auxiliar para convertir ArrayBuffer a base64
@@ -231,9 +228,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
 
       let previewText = '';
 
-      // Detección y extracción de texto según el tipo MIME
       if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        // .docx
         try {
           const result = await mammoth.extractRawText({ arrayBuffer: buffer });
           previewText = result.value;
@@ -242,7 +237,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           previewText = '[Error al extraer texto del documento Word]';
         }
       } else if (mimeType === 'application/pdf') {
-        // .pdf
         try {
           const pdfDoc = await pdfjsLib.getDocument({ data: buffer }).promise;
           let fullText = '';
@@ -258,7 +252,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           previewText = '[Error al extraer texto del PDF]';
         }
       } else {
-        // Para texto plano y otros formatos desconocidos: decodificar como UTF-8
         try {
           const decoder = new TextDecoder('utf-8');
           previewText = decoder.decode(buffer);
@@ -274,13 +267,21 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
         data_base64: dataBase64,
         preview_text: previewText,
       });
+      setFileError(null);
     } catch (err) {
       console.error('Error reading file:', err);
+      setAttachedFile(null);
+      setFileError('No se pudo leer el archivo. Asegúrate de que sea un formato soportado (.txt, .docx, .pdf, etc.).');
+      // Auto‑limpiar el mensaje de error tras 5 segundos
+      setTimeout(() => setFileError(null), 5000);
+    } finally {
+      // Reiniciar el input file para que se pueda seleccionar el mismo archivo de nuevo
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
-    e.target.value = '';
   };
 
-  // Cálculo del porcentaje de contexto usado
   const usedTokens = sessionUsedTokens ?? 0;
   const porcentaje = maxTokens
     ? Math.min(Math.round((usedTokens / maxTokens) * 100), 100)
@@ -290,7 +291,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Auto-grow the textarea up to a max height.
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -298,7 +298,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   }, [input]);
 
-  // Fetch available models from the backend on mount
   useEffect(() => {
     const fetchModels = async () => {
       try {
@@ -320,20 +319,18 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
             done = chunkDone;
             buffer += decoder.decode(value, { stream: !done });
           }
-          // Procesar líneas data: {...}
           const lines = buffer.split('\n');
           let dataLine = '';
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               const data = line.slice(6).trim();
               if (data === '[DONE]') continue;
-              dataLine = data; // tomar la última línea data
+              dataLine = data;
             }
           }
           const jsonStr = dataLine || buffer;
           json = JSON.parse(jsonStr);
         } else {
-          // fallback si el cuerpo no es legible como stream
           json = await res.json();
         }
         const models: { id: string; size_mb: number }[] = json.data ?? [];
@@ -349,17 +346,14 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       }
     };
     fetchModels();
-  }, [backendIp]); // <-- Depende de backendIp para re-fetch si cambia la IP
+  }, [backendIp]);
 
   const handleSend = async () => {
     const trimmed = input.trim();
-    // Permitir enviar si hay un archivo cargado, aunque el texto del input esté vacío
     if ((!trimmed && !attachedFile) || isGenerating || isGeneratingRef.current) return;
 
-    // 1. Construir el contenido final solo con el texto del input (sin inyectar el archivo)
     const finalMessageContent = trimmed;
 
-    // Renombrar el chat basado en la acción del usuario
     if (onFirstUserMessage) {
       onFirstUserMessage(trimmed || `Análisis: ${attachedFile?.name}`);
     }
@@ -381,14 +375,16 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       streaming: true,
     } as Message;
 
-    // Insertar ambos mensajes de inmediato antes de la llamada a la API
     setMessages(prev => [...prev, userMsg, assistantMsg]);
     setInput('');
-    setAttachedFile(null); // <--- LIMPIAR EL ADJUNTO TRAS EL ENVÍO
+    setAttachedFile(null);
+    setFileError(null);
+    // Resetear también el input file
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
     setIsGenerating(true);
     isGeneratingRef.current = true;
-
-    // *** NO reiniciamos sessionUsedTokens aquí para mantener el total acumulado ***
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -404,7 +400,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           model: selectedModel,
           messages: [...messages, userMsg],
           stream: true,
-          // Enviar archivo adjunto como campo separado
           attachments: attachedFile
             ? [
                 {
@@ -422,17 +417,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // CORRECCIÓN: Verificar que response.body no sea null antes de llamar a getReader()
       if (!response.body) throw new Error('No readable stream');
       const reader = response.body.getReader();
 
       const decoder = new TextDecoder();
       let buffer = '';
 
-      // REVISIÓN: Variables locales de control para la velocidad
       let tokenCount = 0;
       let startTime = 0;
-      setTps(null); // Reiniciar el contador al empezar
+      setTps(null);
 
       while (true) {
         const { value, done } = await reader.read();
@@ -440,20 +433,17 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
-        // Keep the last incomplete line in buffer
         buffer = lines.pop() || '';
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             const data = line.slice(6).trim();
             if (data === '[DONE]') {
-              // End of stream
               break;
             }
             try {
               const parsed = JSON.parse(data);
 
-              // INTERCEPTOR DE TELEMETRÍA
               if (parsed.usage) {
                 const { total_tokens } = parsed.usage;
                 if (total_tokens !== undefined) {
@@ -463,14 +453,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
 
               const delta = parsed?.choices?.[0]?.delta?.content;
               if (delta) {
-                // REVISIÓN: Inicializar el temporizador en el primer token real
                 if (tokenCount === 0) {
                   startTime = performance.now();
                 }
                 tokenCount++;
 
-                // Calcular la velocidad en tiempo real
-                const elapsedTime = (performance.now() - startTime) / 1000; // convertir a segundos
+                const elapsedTime = (performance.now() - startTime) / 1000;
                 if (elapsedTime > 0) {
                   setTps(parseFloat((tokenCount / elapsedTime).toFixed(1)));
                 }
@@ -490,7 +478,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           }
         }
       }
-      // Al salir del bucle, marcar streaming como false
       setMessages(prev => prev.map(msg => {
         if (msg.id === assistantMsgId) {
           return { ...msg, streaming: false };
@@ -502,7 +489,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
         // User stopped generation, do nothing
       } else {
         console.error('Error fetching chat completion:', error);
-        // Remove the placeholder assistant message if it exists
         setMessages(prev => {
           const updated = [...prev];
           if (updated.length > 0 && updated[updated.length - 1].role === 'assistant' && updated[updated.length - 1].content === '') {
@@ -516,15 +502,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       setIsGenerating(false);
       isGeneratingRef.current = false;
       abortControllerRef.current = null;
-      // Opcional: si quieres que el indicador desaparezca al terminar, descomenta la siguiente línea:
-      // setTps(null);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      // Permite disparar el envío con Enter si hay texto O si hay un archivo
       if (!isGenerating && (input.trim() || attachedFile !== null)) handleSend();
     }
   };
@@ -535,7 +518,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     <div className="flex h-full flex-1 flex-col overflow-hidden bg-neutral-950">
       {/* Header */}
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-800/60 bg-neutral-950/80 px-4 backdrop-blur">
-        {/* Left side: Menu button (mobile only) + Model selector */}
         <div className="flex items-center gap-2">
           {onToggleSidebar && (
             <button
@@ -547,7 +529,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
               <Menu className="size-4" />
             </button>
           )}
-          {/* Model selector */}
           <div className="relative">
             <select
               value={selectedModel}
@@ -568,9 +549,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           </div>
         </div>
 
-        {/* Right side actions */}
         <div className="flex items-center gap-2.5">
-          {/* Hardware status + telemetría */}
           <div className="flex items-center gap-2 rounded-lg border border-neutral-800/60 bg-neutral-900/40 px-3 py-1.5">
             <span className="relative flex size-2">
               <span className="absolute inline-flex size-full rounded-full animate-ping bg-emerald-400/60" />
@@ -580,19 +559,16 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
               <span className="hidden sm:inline">Dispositivo: </span>
               <span className="text-neutral-200">GPU Intel Arc</span>
             </span>
-            {/* REVISIÓN: Muestra los tokens/s dinámicamente si se está generando texto */}
             {tps !== null && (
               <span className="ml-2 border-l border-neutral-800 pl-2 font-mono text-xs text-emerald-400 animate-pulse">
                 {tps} tok/s
               </span>
             )}
-            {/* Muestra el límite de contexto del modelo activo */}
             {maxTokens && (
               <span className="ml-2 border-l border-neutral-800 pl-2 font-mono text-xs text-neutral-400">
                 {maxTokens} tok
               </span>
             )}
-            {/* Muestra los tokens consumidos en esta sesión */}
             {sessionUsedTokens !== null && (
               <span className="ml-2 border-l border-neutral-800 pl-2 font-mono text-xs text-amber-400">
                 {sessionUsedTokens} used
@@ -600,7 +576,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
             )}
           </div>
 
-          {/* Delete current session button */}
           {onDeleteCurrentSession && (
             <button
               type="button"
@@ -646,7 +621,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
             ))}
           </div>
         )}
-        {/* Indicador de carga mientras se genera la respuesta */}
         {isGenerating && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
           <div className="flex gap-4 px-4 py-5">
             <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-neutral-700/60 bg-neutral-900 text-emerald-400">
@@ -668,14 +642,17 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       {/* Caja de entrada inferior */}
       <div className="shrink-0 px-4 pb-5 pt-2">
         <div className="mx-auto max-w-3xl">
-          {/* VISUALIZADOR DEL ARCHIVO ADJUNTO PREVIO AL ENVÍO */}
           {attachedFile && (
             <div className="mb-2 flex items-center gap-2 rounded-lg bg-neutral-900 border border-neutral-800/80 px-2.5 py-1.5 text-xs text-neutral-300 w-fit animate-fade-in font-mono shadow-md">
               <Paperclip className="size-3.5 text-emerald-400 shrink-0" />
               <span className="truncate max-w-[240px] text-neutral-200">{attachedFile.name}</span>
               <button
                 type="button"
-                onClick={() => setAttachedFile(null)}
+                onClick={() => {
+                  setAttachedFile(null);
+                  setFileError(null);
+                  if (fileInputRef.current) fileInputRef.current.value = '';
+                }}
                 className="ml-1 p-0.5 rounded-full hover:bg-neutral-800 text-neutral-500 hover:text-neutral-300 transition-colors"
                 title="Remover archivo"
               >
@@ -683,9 +660,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
               </button>
             </div>
           )}
+          {fileError && (
+            <div className="mb-2 text-xs text-red-400 font-mono px-1">
+              {fileError}
+            </div>
+          )}
 
           <div className="flex items-end gap-2 rounded-xl border border-neutral-800 bg-neutral-900/80 p-2 shadow-lg shadow-black/20 transition-colors focus-within:border-neutral-700">
-            {/* BOTÓN NATIVO PARA ADJUNTAR ARCHIVO */}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -695,8 +676,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
             >
               <Paperclip className="size-4" />
             </button>
-            
-            {/* Input oculto controlado por el botón de arriba */}
+
             <input
               type="file"
               ref={fileInputRef}
@@ -745,7 +725,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           <p className="mt-2 text-center font-mono text-[11px] text-neutral-700">
             VeloxUI ejecuta modelos localmente vía Intel OpenVINO
           </p>
-          {/* Barra de progreso de contexto */}
           {maxTokens && (
             <div className="w-full px-0 py-1 font-mono text-[10px] text-neutral-500">
               <div className="flex justify-between mb-1">
