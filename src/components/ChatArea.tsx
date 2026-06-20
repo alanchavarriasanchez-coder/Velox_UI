@@ -702,7 +702,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
-              accept=".txt,.js,.ts,.tsx,.json,.py,.md,.xml,.bat,.cfg,.toml,.docx,.pdf"
+              accept=".txt,.js,.ts,.tsx,.json,.py,.md,.xml,.bat,.cfg,.toml,.docx,.pdf,.doc,.rtf,.csv,.log"
             />
 
             <textarea
