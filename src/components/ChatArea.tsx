@@ -4,13 +4,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ArrowUp, Square, Sparkles, User, Brain, ChevronRight, Loader2, Trash2, Menu, Paperclip, X } from 'lucide-react';
 import { Message } from '../App';
-import mammoth from 'mammoth';
-import * as pdfjsLib from 'pdfjs-dist';
-
-// Configurar worker de pdf.js
-if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-}
 
 interface ChatAreaProps {
   messages: Message[];
@@ -230,6 +223,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
 
       if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         try {
+          // Importación dinámica de mammoth
+          const mammoth = (await import('mammoth')).default;
           const result = await mammoth.extractRawText({ arrayBuffer: buffer });
           previewText = result.value;
         } catch (docxError) {
@@ -238,6 +233,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
         }
       } else if (mimeType === 'application/pdf') {
         try {
+          // Importación dinámica de pdfjs-dist
+          const pdfjsLib = await import('pdfjs-dist');
+          // Configurar worker una sola vez
+          if (pdfjsLib.GlobalWorkerOptions && !(window as any).__pdfjsWorkerConfigured) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            (window as any).__pdfjsWorkerConfigured = true;
+          }
           const pdfDoc = await pdfjsLib.getDocument({ data: buffer }).promise;
           let fullText = '';
           for (let i = 1; i <= pdfDoc.numPages; i++) {
