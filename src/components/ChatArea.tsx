@@ -387,31 +387,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     fetchModels();
   }, [backendIp]);
 
-  // --- Truncamiento temprano del historial ---
-  const trimHistory = React.useCallback(() => {
-    if (!maxTokens || sessionUsedTokens === null) return;
-    const threshold = maxTokens * 0.85; // 85%
-    if (sessionUsedTokens > threshold && messages.length > 3) {
-      // Encontrar el primer mensaje de usuario y su respuesta asociada para eliminarlos
-      let firstUserIdx = -1;
-      for (let i = 0; i < messages.length; i++) {
-        if (messages[i].role === 'user') {
-          firstUserIdx = i;
-          break;
-        }
-      }
-      if (firstUserIdx !== -1 && firstUserIdx + 1 < messages.length && messages[firstUserIdx + 1].role === 'assistant') {
-        // Eliminar ese par user‑assistant
-        const truncated = messages.filter((_, idx) => idx !== firstUserIdx && idx !== firstUserIdx + 1);
-        setMessages(truncated);
-        // Reiniciar contador de tokens (el nuevo contexto usará menos tokens)
-        setSessionUsedTokens(0);
-        setTps(null);
-      }
-    }
-  }, [maxTokens, sessionUsedTokens, messages, setMessages]);
-  // --------------------------------------------
-
   const handleSend = async () => {
     const trimmed = input.trim();
     if ((!trimmed && !attachedFile) || isGenerating || isGeneratingRef.current) return;
@@ -421,9 +396,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
 
     // Resetear el ref de tokens para esta generación
     latestTokensRef.current = 0;
-
-    // Truncar historial antes de enviar si es necesario
-    trimHistory();
 
     const currentAttachment = attachedFile;
 
