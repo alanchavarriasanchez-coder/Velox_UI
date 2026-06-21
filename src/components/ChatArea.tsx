@@ -356,10 +356,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     const trimmed = input.trim();
     if ((!trimmed && !attachedFile) || isGenerating || isGeneratingRef.current) return;
 
+    // Guardar referencia al adjunto antes de limpiar el estado (para evitar race condition)
+    const currentAttachment = attachedFile;
+
     const finalMessageContent = trimmed;
 
     if (onFirstUserMessage) {
-      onFirstUserMessage(trimmed || `Análisis: ${attachedFile?.name}`);
+      onFirstUserMessage(trimmed || `Análisis: ${currentAttachment?.name}`);
     }
 
     const userMsgId = crypto.randomUUID();
@@ -405,12 +408,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           model: selectedModel,
           messages: [...messages, userMsg],
           stream: true,
-          attachments: attachedFile
+          attachments: currentAttachment
             ? [
                 {
-                  name: attachedFile.name,
-                  mime_type: attachedFile.mime_type,
-                  data: attachedFile.data_base64,
+                  name: currentAttachment.name,
+                  mime_type: currentAttachment.mime_type,
+                  data: currentAttachment.data_base64,
                 },
               ]
             : [],
