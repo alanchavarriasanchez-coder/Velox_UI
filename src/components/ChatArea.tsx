@@ -211,6 +211,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [contextWarning, setContextWarning] = useState<string | null>(null);
   const [spinnerIndex, setSpinnerIndex] = useState(0);
+  const [summarizingText, setSummarizingText] = useState('Contexto lleno, haciendo ajuste...');
   const frames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
 
   // Efecto para animar el spinner mientras isSummarizing
@@ -549,9 +550,14 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
             try {
               const parsed = JSON.parse(data);
 
-              // Feedback visual: notificación de truncamiento
+              // Feedback visual: notificación de ajuste de contexto
               if (parsed.note === 'truncating') {
                 setIsSummarizing(true);
+                setSummarizingText('Contexto lleno, haciendo ajuste...');
+              }
+              if (parsed.note === 'summarizing') {
+                setIsSummarizing(true);
+                setSummarizingText('Contexto lleno, resumiendo conversación...');
               }
 
               // Si llegamos a contenido delta, el ajuste terminó (el modelo ya produce texto)
@@ -559,6 +565,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
               if (delta) {
                 if (isSummarizing) {
                   setIsSummarizing(false);
+                  setSummarizingText('Contexto lleno, haciendo ajuste...');
                 }
                 if (tokenCount === 0) {
                   startTime = performance.now();
@@ -629,6 +636,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
 
       // Asegurar que cualquier indicador de resumen se desactive al finalizar
       setIsSummarizing(false);
+      setSummarizingText('Contexto lleno, haciendo ajuste...');
 
       // Al finalizar la generación (éxito o error), persistir el último valor conocido de tokens (punto 2 del requerimiento)
       const finalTokens = latestTokensRef.current > 0 ? latestTokensRef.current : (sessionUsedTokens ?? 0);
@@ -915,7 +923,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       {isSummarizing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-neutral-900 border border-neutral-700 rounded-xl p-6 text-center shadow-2xl">
-            <p className="text-emerald-400 font-mono text-lg mb-3">Contexto lleno, haciendo ajuste...</p>
+            <p className="text-emerald-400 font-mono text-lg mb-3">{summarizingText}</p>
             <span className="text-2xl font-mono text-neutral-300">{frames[spinnerIndex]}</span>
           </div>
         </div>
