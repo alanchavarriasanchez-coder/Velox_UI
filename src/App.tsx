@@ -92,6 +92,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const [maxTokens, setMaxTokens] = useState<number>(32768);
+  const [isCleaningVram, setIsCleaningVram] = useState(false); // <-- Nuevo estado
 
   const handleSaveSettings = (newIp: string) => {
     setBackendIp(newIp);
@@ -211,7 +212,15 @@ export default function App() {
         saveSessions([defaultSession]);
       }
     }
-  }, [sessions, currentSessionId]);
+
+    // Limpiar VRAM del backend
+    try {
+      await fetch(`http://${backendIp}:8000/v1/clear_cache`, { method: 'POST' });
+      console.log("VRAM limpiada exitosamente");
+    } catch (err) {
+      console.error("Error al limpiar VRAM:", err);
+    }
+  }, [sessions, currentSessionId, backendIp]); // <-- backendIp añadido a las dependencias
 
   const setMessagesForCurrentSession = useCallback(
     (value: Message[] | ((prev: Message[]) => Message[])) => {
@@ -318,6 +327,26 @@ export default function App() {
                 className="rounded-md bg-emerald-500/10 px-3 py-1.5 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
               >
                 Guardar
+              </button>
+            </div>
+            {/* Botón para limpiar VRAM manualmente */}
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={async () => {
+                  setIsCleaningVram(true);
+                  try {
+                    await fetch(`http://${backendIp}:8000/v1/clear_cache`, { method: 'POST' });
+                    alert('VRAM limpiada exitosamente');
+                  } catch (err) {
+                    alert('Error al limpiar VRAM: ' + err);
+                  } finally {
+                    setIsCleaningVram(false);
+                  }
+                }}
+                disabled={isCleaningVram}
+                className="rounded-md bg-neutral-800 px-3 py-1.5 text-neutral-400 hover:bg-neutral-700 disabled:opacity-50 text-xs font-mono"
+              >
+                {isCleaningVram ? 'Limpiando VRAM...' : 'Limpiar VRAM'}
               </button>
             </div>
           </div>
