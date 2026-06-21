@@ -217,6 +217,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const [previewExpanded, setPreviewExpanded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // --- Estado para indicar si se recortaron mensajes por tokens ---
+  const [isTrimmed, setIsTrimmed] = useState(false);
+
   // Ref para recordar el último valor de sessionUsedTokens reportado, evitando bucles
   const lastReportedTokens = useRef<number | null>(null);
 
@@ -432,6 +435,49 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       streaming: true,
     } as Message;
 
+    // --- Inicio: recorte por tokens antes de enviar ---
+    const messagesToSend = [...messages, userMsg];
+    const maxSafeTokens = maxTokens ? maxTokens * 0.8 : 32768 * 0.8;
+    let trimmedMessages: Message[] = messagesToSend;
+    let trimmedSome = false;
+
+    if (estimateTokens(messagesToSend) > maxSafeTokens) {
+      const firstUserIdx = messagesToSend.findIndex(m => m.role === 'user');
+      const result: Message[] = [];
+      if (firstUserIdx !== -1) {
+        result.push(messagesToSend[firstUserIdx]);
+      }
+      let usedTokens = estimateTokens(result);
+      const additional: Message[] = [];
+      for (let i = messagesToSend.length - 1; i >= 0; i--) {
+        if (i === firstUserIdx) continue;
+        const testTokens = estimateTokens([messagesToSend[i]]);
+        if (usedTokens + testTokens <= maxSafeTokens) {
+          additional.unshift(messagesToSend[i]);
+          usedTokens += testTokens;
+        } else {
+          // Dejar de agregar mensajes (son más antiguos y no caben)
+          break;
+        }
+      }
+      if (firstUserIdx !== -1) {
+        trimmedMessages = result.concat(additional);
+      } else {
+        trimmedMessages = additional;
+      }
+
+      // Si aun así se excede (por ejemplo, primer usuario muy grande), no recortar
+      if (estimateTokens(trimmedMessages) > maxSafeTokens) {
+        trimmedMessages = messagesToSend;
+        trimmedSome = false;
+      } else {
+        trimmedSome = trimmedMessages.length < messagesToSend.length;
+      }
+    }
+
+    setIsTrimmed(trimmedSome);
+    // --- Fin: recorte por tokens ---
+
     setMessages(prev => [...prev, userMsg, assistantMsg]);
     setInput('');
     setAttachedFile(null);
@@ -455,7 +501,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
         },
         body: JSON.stringify({
           model: selectedModel,
-          messages: [...messages, userMsg],
+          messages: trimmedMessages,  // <-- se usa la lista recortada (o completa)
           stream: true,
           attachments: currentAttachment
             ? [
@@ -799,9 +845,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
               </button>
             )}
           </div>
+
           <p className="mt-2 text-center font-mono text-[11px] text-neutral-700">
             VeloxUI ejecuta modelos localmente vía Intel OpenVINO
           </p>
+
           {maxTokens && (
             <div className="w-full px-0 py-1 font-mono text-[10px] text-neutral-500">
               <div className="flex justify-between mb-1">
@@ -816,6 +864,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
                   style={{ width: `${porcentaje}%` }}
                 />
               </div>
+              {isTrimmed && (
+                <div className="text-amber-400 mt-1 text-[10px]">
+                  Se ha recortado el historial para ajustarse al límite de tokens.
+                </div>
+              )}
             </div>
           )}
         </div>
