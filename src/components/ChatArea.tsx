@@ -52,6 +52,23 @@ function parseMessageContent(content: string): { thinkingText: string; finalText
   };
 }
 
+// Función de estimación de tokens
+function estimateTokens(messages: Message[]): number {
+  let total = 0;
+  for (const msg of messages) {
+    let text: string;
+    if (Array.isArray(msg.content)) {
+      text = msg.content.join('');
+    } else if (typeof msg.content === 'string') {
+      text = msg.content;
+    } else {
+      text = String(msg.content);
+    }
+    total += text.length / 4;
+  }
+  return Math.round(total);
+}
+
 // Componente memorizado para cada mensaje
 const MessageItem = React.memo(({
   msg,
