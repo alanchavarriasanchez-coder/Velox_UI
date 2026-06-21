@@ -13,6 +13,7 @@ interface ChatAreaProps {
   backendIp: string;
   onToggleSidebar?: () => void;
   maxTokens?: number;
+  onUsageUpdate?: (tokens: number) => void; // <-- Nuevo prop
 }
 
 // Función auxiliar para extraer el contenido de pensamiento y el texto final
@@ -175,7 +176,7 @@ const MessageItem = React.memo(({
 });
 MessageItem.displayName = 'MessageItem';
 
-const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendIp, onToggleSidebar, maxTokens }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendIp, onToggleSidebar, maxTokens, onUsageUpdate }) => {
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [tps, setTps] = useState<number | null>(null);
@@ -198,6 +199,17 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const [fileError, setFileError] = useState<string | null>(null);
   const [previewExpanded, setPreviewExpanded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Ref para recordar el último valor de sessionUsedTokens reportado, evitando bucles
+  const lastReportedTokens = useRef<number | null>(null);
+
+  // Notificar al padre cada vez que sessionUsedTokens cambie (solo si no es null y es diferente)
+  useEffect(() => {
+    if (sessionUsedTokens !== null && sessionUsedTokens !== lastReportedTokens.current) {
+      lastReportedTokens.current = sessionUsedTokens;
+      onUsageUpdate?.(sessionUsedTokens);
+    }
+  }, [sessionUsedTokens, onUsageUpdate]);
 
   // Función auxiliar para convertir ArrayBuffer a base64
   function arrayBufferToBase64(buffer: ArrayBuffer): string {
@@ -223,7 +235,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
 
       if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         try {
-          // Importación dinámica de mammoth
           const mammoth = (await import('mammoth')).default;
           const result = await mammoth.extractRawText({ arrayBuffer: buffer });
           previewText = result.value;
@@ -233,9 +244,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
         }
       } else if (mimeType === 'application/pdf') {
         try {
-          // Importación dinámica de pdfjs-dist
           const pdfjsLib = await import('pdfjs-dist');
-          // Configurar worker una sola vez
           if (pdfjsLib.GlobalWorkerOptions && !(window as any).__pdfjsWorkerConfigured) {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
             (window as any).__pdfjsWorkerConfigured = true;
@@ -275,10 +284,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       console.error('Error reading file:', err);
       setAttachedFile(null);
       setFileError('No se pudo leer el archivo. Asegúrate de que sea un formato soportado (.txt, .docx, .pdf, etc.).');
-      // Auto‑limpiar el mensaje de error tras 5 segundos
       setTimeout(() => setFileError(null), 5000);
     } finally {
-      // Reiniciar el input file para que se pueda seleccionar el mismo archivo de nuevo
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -351,11 +358,38 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     fetchModels();
   }, [backendIp]);
 
+  // --- Truncamiento temprano del historial ---
+  const trimHistory = React.useCallback(() => {
+    if (!maxTokens || sessionUsedTokens === null) return;
+    const threshold = maxTokens * 0.85; // 85%
+    if (sessionUsedTokens > threshold && messages.length > 3) {
+      // Encontrar el primer mensaje de usuario y su respuesta asociada para eliminarlos
+      let firstUserIdx = -1;
+      for (let i = 0; i < messages.length; i++) {
+        if (messages[i].role === 'user') {
+          firstUserIdx = i;
+          break;
+        }
+      }
+      if (firstUserIdx !== -1 && firstUserIdx + 1 < messages.length && messages[firstUserIdx + 1].role === 'assistant') {
+        // Eliminar ese par user‑assistant
+        const truncated = messages.filter((_, idx) => idx !== firstUserIdx && idx !== firstUserIdx + 1);
+        setMessages(truncated);
+        // Reiniciar contador de tokens (el nuevo contexto usará menos tokens)
+        setSessionUsedTokens(0);
+        setTps(null);
+      }
+    }
+  }, [maxTokens, sessionUsedTokens, messages, setMessages]);
+  // --------------------------------------------
+
   const handleSend = async () => {
     const trimmed = input.trim();
     if ((!trimmed && !attachedFile) || isGenerating || isGeneratingRef.current) return;
 
-    // Guardar referencia al adjunto antes de limpiar el estado (para evitar race condition)
+    // Truncar historial antes de enviar si es necesario
+    trimHistory();
+
     const currentAttachment = attachedFile;
 
     const finalMessageContent = trimmed;
@@ -386,7 +420,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     setAttachedFile(null);
     setPreviewExpanded(false);
     setFileError(null);
-    // Resetear también el input file
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
