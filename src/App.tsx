@@ -286,6 +286,7 @@ export default function App() {
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         maxTokens={maxTokens}
         onUpdateUsage={handleUpdateUsage} // <-- Prop renombrada
+        initialSessionTokens={currentSession?.usageTokens ?? null} // <-- Nueva prop
       />
 
       {isSettingsOpen && (

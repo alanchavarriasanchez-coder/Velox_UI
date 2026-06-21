@@ -14,6 +14,7 @@ interface ChatAreaProps {
   onToggleSidebar?: () => void;
   maxTokens?: number;
   onUpdateUsage?: (tokens: number) => void; // <-- Renombrada
+  initialSessionTokens?: number | null; // <-- Nueva prop
 }
 
 // Función auxiliar para extraer el contenido de pensamiento y el texto final
@@ -193,7 +194,7 @@ const MessageItem = React.memo(({
 });
 MessageItem.displayName = 'MessageItem';
 
-const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendIp, onToggleSidebar, maxTokens, onUpdateUsage }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendIp, onToggleSidebar, maxTokens, onUpdateUsage, initialSessionTokens }) => {
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [tps, setTps] = useState<number | null>(null);
@@ -223,6 +224,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
 
   // Ref para recordar el último valor de sessionUsedTokens reportado, evitando bucles
   const lastReportedTokens = useRef<number | null>(null);
+
+  // --- Inicializar sessionUsedTokens desde la prop (cuando se carga una sesión) ---
+  useEffect(() => {
+    if (initialSessionTokens !== undefined && initialSessionTokens !== null) {
+      setSessionUsedTokens(initialSessionTokens);
+    }
+  }, [initialSessionTokens]);
 
   // Notificar al padre cada vez que sessionUsedTokens cambie (solo si no es null y es diferente)
   useEffect(() => {
