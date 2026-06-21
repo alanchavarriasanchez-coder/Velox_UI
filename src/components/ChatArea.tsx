@@ -408,6 +408,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     const trimmed = input.trim();
     if ((!trimmed && !attachedFile) || isGenerating || isGeneratingRef.current) return;
 
+    // Reiniciar indicador de historial recortado al enviar un nuevo mensaje
+    setIsTrimmed(false);
+
     // Resetear el ref de tokens para esta generación
     latestTokensRef.current = 0;
 
@@ -877,8 +880,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
                 />
               </div>
               {isTrimmed && (
-                <div className="text-amber-400 mt-1 text-[10px]">
-                  Se ha recortado el historial para ajustarse al límite de tokens.
+                <div className="mt-1">
+                  <span className="inline-flex items-center gap-1 rounded border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-400 font-mono">
+                    Historial recortado
+                  </span>
                 </div>
               )}
             </div>
