@@ -1,5 +1,5 @@
 // Verificación: Pasos 1-6 implementados (streaming, delta, estado progresivo, parseo de <think> en tiempo real)
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ArrowUp, Square, Sparkles, User, Brain, ChevronRight, Loader2, Trash2, Menu, Paperclip, X } from 'lucide-react';
@@ -54,7 +54,6 @@ function parseMessageContent(content: string): { thinkingText: string; finalText
 // Componente memorizado para cada mensaje
 const MessageItem = React.memo(({
   msg,
-  idx,
   isLast,
   isGenerating
 }: {
