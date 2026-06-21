@@ -207,6 +207,21 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const isGeneratingRef = useRef(false);
   const latestTokensRef = useRef(0); // <-- Nuevo ref para capturar sincrónicamente el último total_tokens
 
+  // --- Estados para feedback visual de ajuste de contexto ---
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [contextWarning, setContextWarning] = useState<string | null>(null);
+  const [spinnerIndex, setSpinnerIndex] = useState(0);
+  const frames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
+
+  // Efecto para animar el spinner mientras isSummarizing
+  useEffect(() => {
+    if (!isSummarizing) return;
+    const interval = setInterval(() => {
+      setSpinnerIndex(prev => (prev + 1) % frames.length);
+    }, 100);
+    return () => clearInterval(interval);
+  }, [isSummarizing, frames.length]);
+
   // --- Estados para el archivo adjunto ---
   interface AttachedFile {
     name: string;
@@ -534,19 +549,17 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
             try {
               const parsed = JSON.parse(data);
 
-              if (parsed.usage) {
-                const { total_tokens } = parsed.usage;
-                if (total_tokens !== undefined) {
-                  setSessionUsedTokens(total_tokens);
-                  // Notificar al padre inmediatamente (punto 1 del requerimiento)
-                  onUpdateUsage?.(total_tokens);
-                  // Guardar sincrónicamente el valor para usarlo al finalizar
-                  latestTokensRef.current = total_tokens;
-                }
+              // Feedback visual: notificación de truncamiento
+              if (parsed.note === 'truncating') {
+                setIsSummarizing(true);
               }
 
+              // Si llegamos a contenido delta, el ajuste terminó (el modelo ya produce texto)
               const delta = parsed?.choices?.[0]?.delta?.content;
               if (delta) {
+                if (isSummarizing) {
+                  setIsSummarizing(false);
+                }
                 if (tokenCount === 0) {
                   startTime = performance.now();
                 }
@@ -565,6 +578,23 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
                   }
                   return updated;
                 });
+              }
+
+              if (parsed.usage) {
+                const { total_tokens } = parsed.usage;
+                if (total_tokens !== undefined) {
+                  setSessionUsedTokens(total_tokens);
+                  // Notificar al padre inmediatamente (punto 1 del requerimiento)
+                  onUpdateUsage?.(total_tokens);
+                  // Guardar sincrónicamente el valor para usarlo al finalizar
+                  latestTokensRef.current = total_tokens;
+                }
+
+                // Aviso de contexto ajustado automáticamente
+                if (parsed.context_truncated === true) {
+                  setContextWarning('Contexto ajustado automáticamente');
+                  setTimeout(() => setContextWarning(null), 4000);
+                }
               }
             } catch (e) {
               // ignore parse errors
@@ -597,6 +627,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       isGeneratingRef.current = false;
       abortControllerRef.current = null;
 
+      // Asegurar que cualquier indicador de resumen se desactive al finalizar
+      setIsSummarizing(false);
+
       // Al finalizar la generación (éxito o error), persistir el último valor conocido de tokens (punto 2 del requerimiento)
       const finalTokens = latestTokensRef.current > 0 ? latestTokensRef.current : (sessionUsedTokens ?? 0);
       onUpdateUsage?.(finalTokens);
@@ -613,7 +646,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const canSend = (input.trim().length > 0 || attachedFile !== null) && !isGenerating;
 
   return (
-    <div className="flex h-full flex-1 flex-col overflow-hidden bg-neutral-950">
+    <div className="flex h-full flex-1 flex-col overflow-hidden bg-neutral-950 relative">
       {/* Header */}
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-800/60 bg-neutral-950/80 px-4 backdrop-blur">
         <div className="flex items-center gap-2">
@@ -690,6 +723,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           )}
         </div>
       </header>
+
+      {/* Toast de aviso de contexto ajustado */}
+      {contextWarning && (
+        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-amber-500/20 border border-amber-500/30 rounded-lg px-4 py-2 text-amber-300 text-sm font-mono shadow-lg z-40">
+          {contextWarning}
+        </div>
+      )}
 
       {/* Zona de mensajes */}
       <div className="flex-1 overflow-y-auto">
@@ -870,6 +910,16 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           )}
         </div>
       </div>
+
+      {/* Overlay de resumen de contexto */}
+      {isSummarizing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-xl p-6 text-center shadow-2xl">
+            <p className="text-emerald-400 font-mono text-lg mb-3">Contexto lleno, haciendo ajuste...</p>
+            <span className="text-2xl font-mono text-neutral-300">{frames[spinnerIndex]}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
