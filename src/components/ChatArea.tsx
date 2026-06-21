@@ -204,6 +204,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isGeneratingRef = useRef(false);
+  const latestTokensRef = useRef(0); // <-- Nuevo ref para capturar sincrónicamente el último total_tokens
 
   // --- Estados para el archivo adjunto ---
   interface AttachedFile {
@@ -407,6 +408,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     const trimmed = input.trim();
     if ((!trimmed && !attachedFile) || isGenerating || isGeneratingRef.current) return;
 
+    // Resetear el ref de tokens para esta generación
+    latestTokensRef.current = 0;
+
     // Truncar historial antes de enviar si es necesario
     trimHistory();
 
@@ -551,6 +555,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
                 const { total_tokens } = parsed.usage;
                 if (total_tokens !== undefined) {
                   setSessionUsedTokens(total_tokens);
+                  // Notificar al padre inmediatamente (punto 1 del requerimiento)
+                  onUpdateUsage?.(total_tokens);
+                  // Guardar sincrónicamente el valor para usarlo al finalizar
+                  latestTokensRef.current = total_tokens;
                 }
               }
 
@@ -605,6 +613,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       setIsGenerating(false);
       isGeneratingRef.current = false;
       abortControllerRef.current = null;
+
+      // Al finalizar la generación (éxito o error), persistir el último valor conocido de tokens (punto 2 del requerimiento)
+      const finalTokens = latestTokensRef.current > 0 ? latestTokensRef.current : (sessionUsedTokens ?? 0);
+      onUpdateUsage?.(finalTokens);
     }
   };
 
