@@ -13,7 +13,7 @@ interface ChatAreaProps {
   backendIp: string;
   onToggleSidebar?: () => void;
   maxTokens?: number;
-  onUsageUpdate?: (tokens: number) => void; // <-- Nuevo prop
+  onUpdateUsage?: (tokens: number) => void; // <-- Renombrada
 }
 
 // Función auxiliar para extraer el contenido de pensamiento y el texto final
@@ -176,7 +176,7 @@ const MessageItem = React.memo(({
 });
 MessageItem.displayName = 'MessageItem';
 
-const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendIp, onToggleSidebar, maxTokens, onUsageUpdate }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendIp, onToggleSidebar, maxTokens, onUpdateUsage }) => {
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [tps, setTps] = useState<number | null>(null);
@@ -207,9 +207,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   useEffect(() => {
     if (sessionUsedTokens !== null && sessionUsedTokens !== lastReportedTokens.current) {
       lastReportedTokens.current = sessionUsedTokens;
-      onUsageUpdate?.(sessionUsedTokens);
+      onUpdateUsage?.(sessionUsedTokens);
     }
-  }, [sessionUsedTokens, onUsageUpdate]);
+  }, [sessionUsedTokens, onUpdateUsage]);
 
   // Función auxiliar para convertir ArrayBuffer a base64
   function arrayBufferToBase64(buffer: ArrayBuffer): string {

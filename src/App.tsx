@@ -229,15 +229,18 @@ export default function App() {
     [currentSessionId]
   );
 
-  // <-- Nuevo callback para persistir tokens de la sesión activa
-  const handleUsageUpdate = useCallback((tokens: number) => {
-    setSessions((prevSessions) =>
-      prevSessions.map((s) =>
+  // <-- Nuevo callback para persistir tokens de la sesión activa, llamando directamente a saveSessions
+  const handleUpdateUsage = useCallback((tokens: number) => {
+    setSessions((prevSessions) => {
+      const newSessions = prevSessions.map((s) =>
         s.id === currentSessionId
           ? { ...s, usageTokens: tokens, updatedAt: Date.now() }
           : s
-      )
-    );
+      );
+      // Persistir inmediatamente
+      saveSessions(newSessions);
+      return newSessions;
+    });
   }, [currentSessionId]);
 
   useEffect(() => {
@@ -282,7 +285,7 @@ export default function App() {
         backendIp={backendIp}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         maxTokens={maxTokens}
-        onUsageUpdate={handleUsageUpdate} // <-- Nuevo prop
+        onUpdateUsage={handleUpdateUsage} // <-- Prop renombrada
       />
 
       {isSettingsOpen && (
