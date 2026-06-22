@@ -214,6 +214,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const [summarizingText, setSummarizingText] = useState('Contexto lleno, haciendo ajuste...');
   const frames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
 
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [webSources, setWebSources] = useState<Array<{ title: string; url: string }>>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
   // Efecto para animar el spinner mientras isSummarizing
   useEffect(() => {
     if (!isSummarizing) return;
