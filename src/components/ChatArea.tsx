@@ -795,6 +795,32 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
             ))}
           </div>
         )}
+
+        {/* Sección de fuentes web */}
+        {webSources.length > 0 && (
+          <div className="px-4 py-2">
+            <details className="text-xs text-neutral-400">
+              <summary className="cursor-pointer font-mono text-neutral-500 hover:text-neutral-300">
+                📎 Fuentes ({webSources.length})
+              </summary>
+              <ul className="mt-1 space-y-1 list-disc pl-4">
+                {webSources.map((src, i) => (
+                  <li key={i}>
+                    <a
+                      href={src.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-400 hover:underline"
+                    >
+                      {src.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </div>
+        )}
+
         {isGenerating && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
           <div className="flex gap-4 px-4 py-5">
             <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-neutral-700/60 bg-neutral-900 text-emerald-400">
