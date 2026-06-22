@@ -729,6 +729,20 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
             )}
           </div>
 
+          {/* Botón toggle de búsqueda web */}
+          <button
+            type="button"
+            onClick={() => setWebSearchEnabled(prev => !prev)}
+            className={`rounded-lg border px-2 py-1 text-xs font-mono transition-colors ${
+              webSearchEnabled
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                : 'border-neutral-800 bg-neutral-900 text-neutral-500 hover:border-neutral-700'
+            }`}
+            title="Búsqueda en internet"
+          >
+            🌐 Web {webSearchEnabled ? 'ON' : 'OFF'}
+          </button>
+
           {onDeleteCurrentSession && (
             <button
               type="button"
