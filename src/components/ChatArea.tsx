@@ -413,6 +413,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
 
     // Reiniciar indicador de historial recortado al enviar un nuevo mensaje
     setIsTrimmed(false);
+    // Reiniciar estado de búsqueda web
+    setWebSources([]);
+    setIsSearching(false);
 
     // Resetear el ref de tokens para esta generación
     latestTokensRef.current = 0;
