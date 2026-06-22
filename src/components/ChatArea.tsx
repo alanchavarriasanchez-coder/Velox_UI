@@ -510,6 +510,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           model: selectedModel,
           messages: trimmedMessages,  // <-- se usa la lista recortada (o completa)
           stream: true,
+          web_search: webSearchEnabled,
           attachments: currentAttachment
             ? [
                 {
