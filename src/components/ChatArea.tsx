@@ -770,6 +770,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
         </div>
       )}
 
+      {/* Indicador de búsqueda web */}
+      {isSearching && (
+        <div className="text-xs text-amber-400 font-mono px-4 py-1">
+          🔍 Buscando información actualizada...
+        </div>
+      )}
+
       {/* Zona de mensajes */}
       <div className="flex-1 overflow-y-auto">
         {messages.length === 0 ? (
