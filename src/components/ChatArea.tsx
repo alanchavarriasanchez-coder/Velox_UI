@@ -537,6 +537,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       let tokenCount = 0;
       let startTime = 0;
       setTps(null);
+      let lastParsed: any = null; // <-- guarda el último JSON parseado
 
       while (true) {
         const { value, done } = await reader.read();
@@ -550,10 +551,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           if (line.startsWith('data: ')) {
             const data = line.slice(6).trim();
             if (data === '[DONE]') {
+              // captura web_sources si el último mensaje los contenía
+              if (lastParsed && lastParsed.web_sources) {
+                setWebSources(lastParsed.web_sources);
+              }
               break;
             }
             try {
               const parsed = JSON.parse(data);
+              lastParsed = parsed; // actualiza el último JSON válido
 
               // Feedback visual: notificación de ajuste de contexto
               if (parsed.note === 'truncating') {
@@ -563,6 +569,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
               if (parsed.note === 'summarizing') {
                 setIsSummarizing(true);
                 setSummarizingText('Contexto lleno, resumiendo conversación...');
+              }
+              if (parsed.note === 'searching') {
+                setIsSearching(true);
               }
 
               // Si llegamos a contenido delta, el ajuste terminó (el modelo ya produce texto)
