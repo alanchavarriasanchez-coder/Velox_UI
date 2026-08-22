@@ -87,16 +87,21 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [backendIp, setBackendIp] = useState<string>(() => {
-    return localStorage.getItem('veloxui_backend_ip') || '192.168.1.16';
+    return localStorage.getItem('veloxui_backend_ip') || 'localhost';
+  });
+  const [searchBackendIp, setSearchBackendIp] = useState<string>(() => {
+    return localStorage.getItem('veloxui_search_backend_ip') || '192.168.1.16';
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const [maxTokens, setMaxTokens] = useState<number>(32768);
   const [isCleaningVram, setIsCleaningVram] = useState(false); // <-- Nuevo estado
 
-  const handleSaveSettings = (newIp: string) => {
+  const handleSaveSettings = (newIp: string, newSearchIp: string) => {
     setBackendIp(newIp);
     localStorage.setItem('veloxui_backend_ip', newIp);
+    setSearchBackendIp(newSearchIp);
+    localStorage.setItem('veloxui_search_backend_ip', newSearchIp);
     setIsSettingsOpen(false);
   };
 
@@ -296,6 +301,7 @@ export default function App() {
         maxTokens={maxTokens}
         onUpdateUsage={handleUpdateUsage} // <-- Prop renombrada
         initialSessionTokens={currentSession?.usageTokens ?? null} // <-- Nueva prop
+        searchBackendIp={searchBackendIp} // <-- Nueva prop
       />
 
       {isSettingsOpen && (
@@ -303,12 +309,22 @@ export default function App() {
           <div className="w-80 rounded-xl border border-neutral-800 bg-neutral-950 p-4 shadow-2xl">
             <h3 className="font-mono text-sm font-medium text-neutral-200 mb-3">Configuración de Red</h3>
             <label className="block font-mono text-[11px] text-neutral-500 uppercase mb-1">
-              IP del Servidor (PC)
+              IP del Servidor de IA (PC)
             </label>
             <input
               type="text"
               defaultValue={backendIp}
               id="settings-ip-input"
+              placeholder="Ej: localhost"
+              className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 font-mono text-xs text-neutral-100 outline-none focus:border-neutral-700"
+            />
+            <label className="block font-mono text-[11px] text-neutral-500 uppercase mt-3 mb-1">
+              IP del Buscador Web
+            </label>
+            <input
+              type="text"
+              defaultValue={searchBackendIp}
+              id="settings-search-ip-input"
               placeholder="Ej: 192.168.1.16"
               className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 font-mono text-xs text-neutral-100 outline-none focus:border-neutral-700"
             />
@@ -322,7 +338,8 @@ export default function App() {
               <button
                 onClick={() => {
                   const inputEl = document.getElementById('settings-ip-input') as HTMLInputElement;
-                  if (inputEl) handleSaveSettings(inputEl.value.trim());
+                  const searchInputEl = document.getElementById('settings-search-ip-input') as HTMLInputElement;
+                  if (inputEl && searchInputEl) handleSaveSettings(inputEl.value.trim(), searchInputEl.value.trim());
                 }}
                 className="rounded-md bg-emerald-500/10 px-3 py-1.5 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
               >

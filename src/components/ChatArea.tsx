@@ -15,6 +15,7 @@ interface ChatAreaProps {
   maxTokens?: number;
   onUpdateUsage?: (tokens: number) => void; // <-- Renombrada
   initialSessionTokens?: number | null; // <-- Nueva prop
+  searchBackendIp?: string; // <-- Nueva prop para el motor de búsqueda
 }
 
 // Función auxiliar para extraer el contenido de pensamiento y el texto final
@@ -194,7 +195,7 @@ const MessageItem = React.memo(({
 });
 MessageItem.displayName = 'MessageItem';
 
-const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendIp, onToggleSidebar, maxTokens, onUpdateUsage, initialSessionTokens }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendIp, onToggleSidebar, maxTokens, onUpdateUsage, initialSessionTokens, searchBackendIp }) => {
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [tps, setTps] = useState<number | null>(null);
@@ -503,7 +504,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     abortControllerRef.current = controller;
 
     try {
-      const response = await fetch(`http://${backendIp}:8080/v1/chat/completions`, {
+      // Determinar el servidor a usar según el estado de búsqueda web
+      const effectiveIp = webSearchEnabled && searchBackendIp ? searchBackendIp : backendIp;
+
+      const response = await fetch(`http://${effectiveIp}:8080/v1/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
