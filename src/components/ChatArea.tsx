@@ -4,18 +4,19 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ArrowUp, Square, Sparkles, User, Brain, ChevronRight, Loader2, Trash2, Menu, Paperclip, X } from 'lucide-react';
 import { Message } from '../App';
+import { ServiceConfig, buildServiceUrl } from '../config';
 
 interface ChatAreaProps {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   onFirstUserMessage?: (userMessage: string) => void;
   onDeleteCurrentSession?: () => void;
-  backendIp: string;
+  backendConfig: ServiceConfig;
   onToggleSidebar?: () => void;
   maxTokens?: number;
-  onUpdateUsage?: (tokens: number) => void; // <-- Renombrada
-  initialSessionTokens?: number | null; // <-- Nueva prop
-  searchBackendIp?: string; // <-- Nueva prop para el motor de búsqueda
+  onUpdateUsage?: (tokens: number) => void;
+  initialSessionTokens?: number | null;
+  searchConfig?: ServiceConfig;
 }
 
 // Función auxiliar para extraer el contenido de pensamiento y el texto final
@@ -195,7 +196,7 @@ const MessageItem = React.memo(({
 });
 MessageItem.displayName = 'MessageItem';
 
-const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendIp, onToggleSidebar, maxTokens, onUpdateUsage, initialSessionTokens, searchBackendIp }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendConfig, onToggleSidebar, maxTokens, onUpdateUsage, initialSessionTokens }) => {
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [tps, setTps] = useState<number | null>(null);
@@ -206,7 +207,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isGeneratingRef = useRef(false);
-  const latestTokensRef = useRef(0); // <-- Nuevo ref para capturar sincrónicamente el último total_tokens
+  const latestTokensRef = useRef(0);
 
   // --- Estados para feedback visual de ajuste de contexto ---
   const [isSummarizing, setIsSummarizing] = useState(false);
@@ -361,7 +362,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   useEffect(() => {
     const fetchModels = async () => {
       try {
-        const res = await fetch(`http://${backendIp}:8080/v1/models`, {
+        const res = await fetch(buildServiceUrl(backendConfig, '/v1/models'), {
           headers: {
             'Content-Type': 'application/json',
             'X-Client-Name': 'VeloxUI',
@@ -406,7 +407,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       }
     };
     fetchModels();
-  }, [backendIp]);
+  }, [backendConfig.ip, backendConfig.port]);
 
   const handleSend = async () => {
     const trimmed = input.trim();
@@ -504,10 +505,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     abortControllerRef.current = controller;
 
     try {
-      // Determinar el servidor a usar según el estado de búsqueda web
-      const effectiveIp = webSearchEnabled && searchBackendIp ? searchBackendIp : backendIp;
-
-      const response = await fetch(`http://${effectiveIp}:8080/v1/chat/completions`, {
+      const response = await fetch(buildServiceUrl(backendConfig, '/v1/chat/completions'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -515,7 +513,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
         },
         body: JSON.stringify({
           model: selectedModel,
-          messages: trimmedMessages,  // <-- se usa la lista recortada (o completa)
+          messages: trimmedMessages,
           stream: true,
           web_search: webSearchEnabled,
           attachments: currentAttachment

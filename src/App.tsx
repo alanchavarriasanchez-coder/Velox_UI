@@ -4,6 +4,7 @@ import ChatArea from './components/ChatArea';
 import SplashScreen from './components/SplashScreen';
 import { join } from '@tauri-apps/api/path';
 import { BaseDirectory, writeTextFile, readTextFile, mkdir, exists, remove, readDir } from '@tauri-apps/plugin-fs';
+import { ServiceConfig, DEFAULT_BACKEND_CONFIG, DEFAULT_SEARCH_CONFIG, loadServiceConfig, saveServiceConfig, buildServiceUrl } from './config';
 
 function isTauri(): boolean {
   return typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__ !== undefined;
@@ -44,7 +45,6 @@ async function loadSessions(): Promise<ChatSession[]> {
         const filePath = await join(chatsDir, entry.name);
         const data = await readTextFile(filePath, { baseDir: BaseDirectory.AppData });
         const session = JSON.parse(data) as ChatSession;
-        // usageTokens se conserva automáticamente si existe en el JSON
         sessions.push(session);
       }
     }
@@ -70,7 +70,7 @@ async function saveSessions(sessions: ChatSession[]): Promise<void> {
 
     for (const session of sessions) {
       const filePath = await join(chatsDir, `${session.id}.json`);
-      const data = JSON.stringify(session, null, 2); // usageTokens se incluirá si no es undefined
+      const data = JSON.stringify(session, null, 2);
       await writeTextFile(filePath, data, { baseDir: BaseDirectory.AppData });
     }
   } catch (err) {
@@ -86,22 +86,24 @@ export default function App() {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  const [backendIp, setBackendIp] = useState<string>(() => {
-    return localStorage.getItem('veloxui_backend_ip') || 'localhost';
-  });
-  const [searchBackendIp, setSearchBackendIp] = useState<string>(() => {
-    return localStorage.getItem('veloxui_search_backend_ip') || '192.168.1.16';
-  });
+  const [backendConfig, setBackendConfig] = useState<ServiceConfig>(() =>
+    loadServiceConfig('veloxui_backend', DEFAULT_BACKEND_CONFIG)
+  );
+  const [searchConfig, setSearchConfig] = useState<ServiceConfig>(() =>
+    loadServiceConfig('veloxui_search_backend', DEFAULT_SEARCH_CONFIG)
+  );
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const [maxTokens, setMaxTokens] = useState<number>(32768);
-  const [isCleaningVram, setIsCleaningVram] = useState(false); // <-- Nuevo estado
+  const [isCleaningVram, setIsCleaningVram] = useState(false);
 
-  const handleSaveSettings = (newIp: string, newSearchIp: string) => {
-    setBackendIp(newIp);
-    localStorage.setItem('veloxui_backend_ip', newIp);
-    setSearchBackendIp(newSearchIp);
-    localStorage.setItem('veloxui_search_backend_ip', newSearchIp);
+  const handleSaveSettings = (newBackend: ServiceConfig, newSearch: ServiceConfig) => {
+    setBackendConfig(newBackend);
+    saveServiceConfig('veloxui_backend', newBackend);
+
+    setSearchConfig(newSearch);
+    saveServiceConfig('veloxui_search_backend', newSearch);
+
     setIsSettingsOpen(false);
   };
 
@@ -132,7 +134,7 @@ export default function App() {
   useEffect(() => {
     const fetchActiveMaxTokens = async () => {
       try {
-        const res = await fetch(`http://${backendIp}:8080/v1/models`);
+        const res = await fetch(buildServiceUrl(backendConfig, '/v1/models'));
         const data = await res.json();
         if (data.active_max_context_tokens) {
           setMaxTokens(data.active_max_context_tokens);
@@ -142,7 +144,7 @@ export default function App() {
       }
     };
     fetchActiveMaxTokens();
-  }, [backendIp]);
+  }, [backendConfig.ip, backendConfig.port]);
 
   useEffect(() => {
     if (isFirstRender.current) {
@@ -218,14 +220,13 @@ export default function App() {
       }
     }
 
-    // Limpiar VRAM del backend
     try {
-      await fetch(`http://${backendIp}:8080/v1/clear_cache`, { method: 'POST' });
+      await fetch(buildServiceUrl(backendConfig, '/v1/clear_cache'), { method: 'POST' });
       console.log("VRAM limpiada exitosamente");
     } catch (err) {
       console.error("Error al limpiar VRAM:", err);
     }
-  }, [sessions, currentSessionId, backendIp]); // <-- backendIp añadido a las dependencias
+  }, [sessions, currentSessionId, backendConfig.ip, backendConfig.port]);
 
   const setMessagesForCurrentSession = useCallback(
     (value: Message[] | ((prev: Message[]) => Message[])) => {
@@ -243,7 +244,6 @@ export default function App() {
     [currentSessionId]
   );
 
-  // <-- Nuevo callback para persistir tokens de la sesión activa, llamando directamente a saveSessions
   const handleUpdateUsage = useCallback((tokens: number) => {
     setSessions((prevSessions) => {
       const newSessions = prevSessions.map((s) =>
@@ -251,7 +251,6 @@ export default function App() {
           ? { ...s, usageTokens: tokens, updatedAt: Date.now() }
           : s
       );
-      // Persistir inmediatamente
       saveSessions(newSessions);
       return newSessions;
     });
@@ -296,12 +295,12 @@ export default function App() {
         setMessages={setMessagesForCurrentSession}
         onFirstUserMessage={handleFirstUserMessage}
         onDeleteCurrentSession={() => currentSessionId && handleDeleteSession(currentSessionId)}
-        backendIp={backendIp}
+        backendConfig={backendConfig}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         maxTokens={maxTokens}
-        onUpdateUsage={handleUpdateUsage} // <-- Prop renombrada
-        initialSessionTokens={currentSession?.usageTokens ?? null} // <-- Nueva prop
-        searchBackendIp={searchBackendIp} // <-- Nueva prop
+        onUpdateUsage={handleUpdateUsage}
+        initialSessionTokens={currentSession?.usageTokens ?? null}
+        searchConfig={searchConfig}
       />
 
       {isSettingsOpen && (
@@ -313,9 +312,19 @@ export default function App() {
             </label>
             <input
               type="text"
-              defaultValue={backendIp}
+              defaultValue={backendConfig.ip}
               id="settings-ip-input"
               placeholder="Ej: localhost"
+              className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 font-mono text-xs text-neutral-100 outline-none focus:border-neutral-700"
+            />
+            <label className="block font-mono text-[11px] text-neutral-500 uppercase mt-3 mb-1">
+              Puerto del Servidor de IA
+            </label>
+            <input
+              type="text"
+              defaultValue={backendConfig.port}
+              id="settings-port-input"
+              placeholder="Ej: 8000"
               className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 font-mono text-xs text-neutral-100 outline-none focus:border-neutral-700"
             />
             <label className="block font-mono text-[11px] text-neutral-500 uppercase mt-3 mb-1">
@@ -323,9 +332,19 @@ export default function App() {
             </label>
             <input
               type="text"
-              defaultValue={searchBackendIp}
+              defaultValue={searchConfig.ip}
               id="settings-search-ip-input"
               placeholder="Ej: 192.168.1.16"
+              className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 font-mono text-xs text-neutral-100 outline-none focus:border-neutral-700"
+            />
+            <label className="block font-mono text-[11px] text-neutral-500 uppercase mt-3 mb-1">
+              Puerto del Buscador Web
+            </label>
+            <input
+              type="text"
+              defaultValue={searchConfig.port}
+              id="settings-search-port-input"
+              placeholder="Ej: 8080"
               className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 font-mono text-xs text-neutral-100 outline-none focus:border-neutral-700"
             />
             <div className="mt-4 flex justify-end gap-2 text-xs font-mono">
@@ -337,22 +356,28 @@ export default function App() {
               </button>
               <button
                 onClick={() => {
-                  const inputEl = document.getElementById('settings-ip-input') as HTMLInputElement;
-                  const searchInputEl = document.getElementById('settings-search-ip-input') as HTMLInputElement;
-                  if (inputEl && searchInputEl) handleSaveSettings(inputEl.value.trim(), searchInputEl.value.trim());
+                  const ipInput = document.getElementById('settings-ip-input') as HTMLInputElement;
+                  const portInput = document.getElementById('settings-port-input') as HTMLInputElement;
+                  const searchIpInput = document.getElementById('settings-search-ip-input') as HTMLInputElement;
+                  const searchPortInput = document.getElementById('settings-search-port-input') as HTMLInputElement;
+                  if (ipInput && portInput && searchIpInput && searchPortInput) {
+                    handleSaveSettings(
+                      { ip: ipInput.value.trim(), port: portInput.value.trim() },
+                      { ip: searchIpInput.value.trim(), port: searchPortInput.value.trim() }
+                    );
+                  }
                 }}
                 className="rounded-md bg-emerald-500/10 px-3 py-1.5 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
               >
                 Guardar
               </button>
             </div>
-            {/* Botón para limpiar VRAM manualmente */}
             <div className="mt-4 flex justify-center">
               <button
                 onClick={async () => {
                   setIsCleaningVram(true);
                   try {
-                    await fetch(`http://${backendIp}:8080/v1/clear_cache`, { method: 'POST' });
+                    await fetch(buildServiceUrl(backendConfig, '/v1/clear_cache'), { method: 'POST' });
                     alert('VRAM limpiada exitosamente');
                   } catch (err) {
                     alert('Error al limpiar VRAM: ' + err);
