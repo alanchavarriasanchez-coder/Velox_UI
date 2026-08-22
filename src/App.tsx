@@ -87,7 +87,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [backendIp, setBackendIp] = useState<string>(() => {
-    return localStorage.getItem('veloxui_backend_ip') || 'localhost';
+    return localStorage.getItem('veloxui_backend_ip') || '192.168.1.16';
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -127,7 +127,7 @@ export default function App() {
   useEffect(() => {
     const fetchActiveMaxTokens = async () => {
       try {
-        const res = await fetch(`http://${backendIp}:8000/v1/models`);
+        const res = await fetch(`http://${backendIp}:8080/v1/models`);
         const data = await res.json();
         if (data.active_max_context_tokens) {
           setMaxTokens(data.active_max_context_tokens);
@@ -215,7 +215,7 @@ export default function App() {
 
     // Limpiar VRAM del backend
     try {
-      await fetch(`http://${backendIp}:8000/v1/clear_cache`, { method: 'POST' });
+      await fetch(`http://${backendIp}:8080/v1/clear_cache`, { method: 'POST' });
       console.log("VRAM limpiada exitosamente");
     } catch (err) {
       console.error("Error al limpiar VRAM:", err);
@@ -309,7 +309,7 @@ export default function App() {
               type="text"
               defaultValue={backendIp}
               id="settings-ip-input"
-              placeholder="Ej: 100.117.217.49"
+              placeholder="Ej: 192.168.1.16"
               className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 font-mono text-xs text-neutral-100 outline-none focus:border-neutral-700"
             />
             <div className="mt-4 flex justify-end gap-2 text-xs font-mono">
@@ -335,7 +335,7 @@ export default function App() {
                 onClick={async () => {
                   setIsCleaningVram(true);
                   try {
-                    await fetch(`http://${backendIp}:8000/v1/clear_cache`, { method: 'POST' });
+                    await fetch(`http://${backendIp}:8080/v1/clear_cache`, { method: 'POST' });
                     alert('VRAM limpiada exitosamente');
                   } catch (err) {
                     alert('Error al limpiar VRAM: ' + err);
