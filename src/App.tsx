@@ -4,7 +4,7 @@ import ChatArea from './components/ChatArea';
 import SplashScreen from './components/SplashScreen';
 import { join } from '@tauri-apps/api/path';
 import { BaseDirectory, writeTextFile, readTextFile, mkdir, exists, remove, readDir } from '@tauri-apps/plugin-fs';
-import { ServiceConfig, DEFAULT_BACKEND_CONFIG, DEFAULT_SEARCH_CONFIG, loadServiceConfig, saveServiceConfig, buildServiceUrl } from './config';
+import { ServiceConfig, DEFAULT_BACKEND_CONFIG, DEFAULT_SEARCH_CONFIG, loadServiceConfig, saveServiceConfig, buildServiceUrl, loadSystemPrompt, saveSystemPrompt, uuid } from './config';
 
 function isTauri(): boolean {
   return typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__ !== undefined;
@@ -92,17 +92,32 @@ export default function App() {
   const [searchConfig, setSearchConfig] = useState<ServiceConfig>(() =>
     loadServiceConfig('veloxui_search_backend', DEFAULT_SEARCH_CONFIG)
   );
+  const [systemPrompt, setSystemPrompt] = useState<string>(() => loadSystemPrompt());
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const [maxTokens, setMaxTokens] = useState<number>(32768);
   const [isCleaningVram, setIsCleaningVram] = useState(false);
 
-  const handleSaveSettings = (newBackend: ServiceConfig, newSearch: ServiceConfig) => {
-    setBackendConfig(newBackend);
-    saveServiceConfig('veloxui_backend', newBackend);
+  const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
 
-    setSearchConfig(newSearch);
-    saveServiceConfig('veloxui_search_backend', newSearch);
+  const handleSaveSettings = (newBackend: ServiceConfig, newSearch: ServiceConfig, newSystemPrompt: string) => {
+    const backendResult = saveServiceConfig('veloxui_backend', newBackend, DEFAULT_BACKEND_CONFIG);
+    const searchResult = saveServiceConfig('veloxui_search_backend', newSearch, DEFAULT_SEARCH_CONFIG);
+    const healedBackend = loadServiceConfig('veloxui_backend', DEFAULT_BACKEND_CONFIG);
+    const healedSearch = loadServiceConfig('veloxui_search_backend', DEFAULT_SEARCH_CONFIG);
+
+    setBackendConfig(healedBackend);
+    setSearchConfig(healedSearch);
+    setSystemPrompt(newSystemPrompt.trim());
+    saveSystemPrompt(newSystemPrompt);
+
+    if (backendResult.healed || searchResult.healed) {
+      setSettingsMessage(
+        'La IP inválida fue reemplazada por la IP por defecto. "0.0.0.0" es la dirección en la que el servidor escucha, no a la que debes apuntar.'
+      );
+    } else {
+      setSettingsMessage(null);
+    }
 
     setIsSettingsOpen(false);
   };
@@ -119,7 +134,7 @@ export default function App() {
         setCurrentSessionId(sorted[0].id);
       } else {
         const defaultSession: ChatSession = {
-          id: crypto.randomUUID(),
+          id: uuid(),
           title: 'Nuevo Chat',
           messages: [{ role: 'assistant', content: '¡Hola! Soy VeloxUI. ¿En qué puedo ayudarte?' }],
           updatedAt: Date.now(),
@@ -163,7 +178,7 @@ export default function App() {
 
   const handleNewChat = useCallback(() => {
     const newSession: ChatSession = {
-      id: crypto.randomUUID(),
+      id: uuid(),
       title: 'Nuevo Chat',
       messages: [{ role: 'assistant', content: '¡Hola! Soy VeloxUI. ¿En qué puedo ayudarte?' }],
       updatedAt: Date.now(),
@@ -209,7 +224,7 @@ export default function App() {
         setCurrentSessionId(sorted[0].id);
       } else {
         const defaultSession: ChatSession = {
-          id: crypto.randomUUID(),
+          id: uuid(),
           title: 'Nuevo Chat',
           messages: [{ role: 'assistant', content: '¡Hola! Soy VeloxUI. ¿En qué puedo ayudarte?' }],
           updatedAt: Date.now(),
@@ -301,12 +316,18 @@ export default function App() {
         onUpdateUsage={handleUpdateUsage}
         initialSessionTokens={currentSession?.usageTokens ?? null}
         searchConfig={searchConfig}
+        systemPrompt={systemPrompt}
       />
 
       {isSettingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-80 rounded-xl border border-neutral-800 bg-neutral-950 p-4 shadow-2xl">
+          <div className="w-[28rem] max-h-[90vh] overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-950 p-4 shadow-2xl">
             <h3 className="font-mono text-sm font-medium text-neutral-200 mb-3">Configuración de Red</h3>
+            {settingsMessage && (
+              <p className="mb-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-[11px] font-mono text-amber-300">
+                {settingsMessage}
+              </p>
+            )}
             <label className="block font-mono text-[11px] text-neutral-500 uppercase mb-1">
               IP del Servidor de IA (PC)
             </label>
@@ -315,6 +336,14 @@ export default function App() {
               defaultValue={backendConfig.ip}
               id="settings-ip-input"
               placeholder="Ej: localhost"
+              onInput={(e) => {
+                const v = (e.target as HTMLInputElement).value.trim();
+                setSettingsMessage(
+                  v === '0.0.0.0' || v === '::' || v === '0:0:0:0:0:0:0:0'
+                    ? '"0.0.0.0" es donde el servidor escucha, no a donde debes apuntar. Usa localhost, 127.0.0.1 o la IP de tu PC (ej: 192.168.1.5).'
+                    : null
+                );
+              }}
               className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 font-mono text-xs text-neutral-100 outline-none focus:border-neutral-700"
             />
             <label className="block font-mono text-[11px] text-neutral-500 uppercase mt-3 mb-1">
@@ -347,6 +376,19 @@ export default function App() {
               placeholder="Ej: 8080"
               className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 font-mono text-xs text-neutral-100 outline-none focus:border-neutral-700"
             />
+            <label className="block font-mono text-[11px] text-neutral-500 uppercase mt-3 mb-1">
+              Prompt de Sistema (opcional)
+            </label>
+            <textarea
+              id="settings-system-prompt-input"
+              defaultValue={systemPrompt}
+              rows={4}
+              placeholder="Eres VeloxUI... (si lo dejas vacío, el servidor usa su config/config.json)"
+              className="w-full resize-y rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 font-mono text-xs text-neutral-100 outline-none focus:border-neutral-700"
+            />
+            <p className="mt-1 text-[11px] font-mono text-neutral-600">
+              Se envía al servidor en cada mensaje. Déjalo vacío para usar el prompt configurado en el archivo del servidor.
+            </p>
             <div className="mt-4 flex justify-end gap-2 text-xs font-mono">
               <button
                 onClick={() => setIsSettingsOpen(false)}
@@ -360,10 +402,12 @@ export default function App() {
                   const portInput = document.getElementById('settings-port-input') as HTMLInputElement;
                   const searchIpInput = document.getElementById('settings-search-ip-input') as HTMLInputElement;
                   const searchPortInput = document.getElementById('settings-search-port-input') as HTMLInputElement;
-                  if (ipInput && portInput && searchIpInput && searchPortInput) {
+                  const systemPromptInput = document.getElementById('settings-system-prompt-input') as HTMLTextAreaElement;
+                  if (ipInput && portInput && searchIpInput && searchPortInput && systemPromptInput) {
                     handleSaveSettings(
                       { ip: ipInput.value.trim(), port: portInput.value.trim() },
-                      { ip: searchIpInput.value.trim(), port: searchPortInput.value.trim() }
+                      { ip: searchIpInput.value.trim(), port: searchPortInput.value.trim() },
+                      systemPromptInput.value
                     );
                   }
                 }}

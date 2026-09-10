@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ArrowUp, Square, Sparkles, User, Brain, ChevronRight, Loader2, Trash2, Menu, Paperclip, X } from 'lucide-react';
 import { Message } from '../App';
-import { ServiceConfig, buildServiceUrl } from '../config';
+import { ServiceConfig, buildServiceUrl, uuid } from '../config';
 
 interface ChatAreaProps {
   messages: Message[];
@@ -17,6 +17,7 @@ interface ChatAreaProps {
   onUpdateUsage?: (tokens: number) => void;
   initialSessionTokens?: number | null;
   searchConfig?: ServiceConfig;
+  systemPrompt?: string;
 }
 
 // Función auxiliar para extraer el contenido de pensamiento y el texto final
@@ -196,7 +197,7 @@ const MessageItem = React.memo(({
 });
 MessageItem.displayName = 'MessageItem';
 
-const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendConfig, onToggleSidebar, maxTokens, onUpdateUsage, initialSessionTokens }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendConfig, onToggleSidebar, maxTokens, onUpdateUsage, initialSessionTokens, searchConfig, systemPrompt }) => {
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [tps, setTps] = useState<number | null>(null);
@@ -219,6 +220,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [webSources, setWebSources] = useState<Array<{ title: string; url: string }>>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [queuePosition, setQueuePosition] = useState<number | null>(null);
 
   // Efecto para animar el spinner mientras isSummarizing
   useEffect(() => {
@@ -418,6 +420,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     // Reiniciar estado de búsqueda web
     setWebSources([]);
     setIsSearching(false);
+    setQueuePosition(null);
 
     // Resetear el ref de tokens para esta generación
     latestTokensRef.current = 0;
@@ -430,8 +433,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       onFirstUserMessage(trimmed || `Análisis: ${currentAttachment?.name}`);
     }
 
-    const userMsgId = crypto.randomUUID();
-    const assistantMsgId = crypto.randomUUID();
+    const userMsgId = uuid();
+    const assistantMsgId = uuid();
 
     const userMsg: Message = {
       id: userMsgId,
@@ -516,6 +519,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           messages: trimmedMessages,
           stream: true,
           web_search: webSearchEnabled,
+          ...(webSearchEnabled && searchConfig
+            ? { search_engine_url: `http://${searchConfig.ip}:${searchConfig.port}` }
+            : {}),
+          ...(systemPrompt && systemPrompt.trim() ? { system_prompt: systemPrompt.trim() } : {}),
           attachments: currentAttachment
             ? [
                 {
@@ -577,6 +584,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
               }
               if (parsed.note === 'searching') {
                 setIsSearching(true);
+              }
+              if (parsed.note === 'queued') {
+                setQueuePosition(parsed.queue_position ?? 0);
+              }
+              if (parsed.note === 'started') {
+                setQueuePosition(null);
               }
 
               // Si llegamos a contenido delta, el ajuste terminó (el modelo ya produce texto)
@@ -656,6 +669,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       // Asegurar que cualquier indicador de resumen se desactive al finalizar
       setIsSummarizing(false);
       setSummarizingText('Contexto lleno, haciendo ajuste...');
+      setQueuePosition(null);
 
       // Al finalizar la generación (éxito o error), persistir el último valor conocido de tokens (punto 2 del requerimiento)
       const finalTokens = latestTokensRef.current > 0 ? latestTokensRef.current : (sessionUsedTokens ?? 0);
@@ -776,6 +790,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       {isSearching && (
         <div className="text-xs text-amber-400 font-mono px-4 py-1">
           🔍 Buscando información actualizada...
+        </div>
+      )}
+
+      {/* Indicador de posición en cola */}
+      {queuePosition !== null && (
+        <div className="text-xs text-cyan-400 font-mono px-4 py-1 animate-pulse">
+          ⏳ En cola: posición {queuePosition}
         </div>
       )}
 

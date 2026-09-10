@@ -1,0 +1,11 @@
+.aider*
+.env
+.aider.tags.cache.v4
+.git
+frames_matrix.txt
+src/components/SplashScreen.tsx
+src-tauri
+node_modules/
+dist/
+veloxui.keystore
+repomix-output.xml

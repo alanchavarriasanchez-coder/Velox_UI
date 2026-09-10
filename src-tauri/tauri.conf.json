@@ -1,29 +1,49 @@
 {
-  "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/dev/crates/tauri-config-schema/schema.json",
-  "productName": "veloxui",
-  "version": "0.1.0",
-  "identifier": "com.veloxui.app",
-  "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
-    "devUrl": "http://localhost:1420",
-    "frontendDist": "../dist"
-  },
-  "app": {
-    "windows": [
-      {
-        "title": "VeloxUI",
-        "width": 1000,
-        "height": 700,
-        "resizable": true,
-        "fullscreen": false
-      }
-    ],
-    "security": {
-      "csp": null
-    }
-  },
-  "bundle": {
-    "active": false
-  }
+    "$schema":  "https://raw.githubusercontent.com/nicedoc/tauri/dev/crates/tauri-config-schema/schema.json",
+    "productName":  "veloxui",
+    "version":  "0.1.0",
+    "identifier":  "com.veloxui.app",
+    "build":  {
+                  "beforeDevCommand":  "npm run dev",
+                  "beforeBuildCommand":  "npm run build",
+                  "devUrl":  "http://localhost:1420",
+                  "frontendDist":  "../dist"
+              },
+    "app":  {
+                "windows":  [
+                                {
+                                    "title":  "VeloxUI",
+                                    "width":  1000,
+                                    "height":  700,
+                                    "resizable":  true,
+                                    "fullscreen":  false
+                                }
+                            ],
+                "security":  {
+                                 "csp":  null
+                             }
+            },
+    "bundle":  {
+                   "active":  true,
+                   "targets":  [
+                                   "nsis"
+                               ],
+                   "icon":  [
+                                "icons/32x32.png",
+                                "icons/64x64.png",
+                                "icons/128x128.png",
+                                "icons/128x128@2x.png",
+                                "icons/icon.png",
+                                "icons/icon.ico",
+                                "icons/icon.icns"
+                            ]
+               },
+    "plugins":  {
+                    "sign-android":  {
+                                         "keystore":  "veloxui.keystore",
+                                         "keystore-password":  "1659428",
+                                         "alias":  "veloxui",
+                                         "password":  "1659428"
+                                     }
+                }
 }
