@@ -567,11 +567,36 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
               if (lastParsed && lastParsed.web_sources) {
                 setWebSources(lastParsed.web_sources);
               }
+              // Aviso persistente en el chat si hubo recorte de contexto
+              if (lastParsed && lastParsed.context_truncated) {
+                setMessages(prev => [
+                  ...prev,
+                  {
+                    id: uuid(),
+                    role: 'assistant',
+                    content: '> ⚠️ **Aviso de VeloxUI:** El archivo adjunto o los mensajes más antiguos han sido descargados de la memoria de video para evitar un desbordamiento. El modelo ya no tiene acceso a ellos.',
+                    streaming: false,
+                  } as Message,
+                ]);
+              }
               break;
             }
             try {
               const parsed = JSON.parse(data);
               lastParsed = parsed; // actualiza el último JSON válido
+
+              // Error reportado por el backend: inyectarlo en el último mensaje del asistente
+              if (parsed.error) {
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last && last.role === 'assistant') {
+                    updated[updated.length - 1] = { ...last, content: `⚠️ ${parsed.error}` };
+                  }
+                  return updated;
+                });
+                break;
+              }
 
               // Feedback visual: notificación de ajuste de contexto
               if (parsed.note === 'truncating') {
@@ -595,6 +620,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
               // Si llegamos a contenido delta, el ajuste terminó (el modelo ya produce texto)
               const delta = parsed?.choices?.[0]?.delta?.content;
               if (delta) {
+                setIsSearching(false);
                 if (isSummarizing) {
                   setIsSummarizing(false);
                   setSummarizingText('Contexto lleno, haciendo ajuste...');
@@ -670,6 +696,24 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       setIsSummarizing(false);
       setSummarizingText('Contexto lleno, haciendo ajuste...');
       setQueuePosition(null);
+      setIsSearching(false);
+
+      // Detección de respuesta vacía: evitar que quede un mensaje del asistente en blanco
+      setMessages(prev => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (
+          last &&
+          last.role === 'assistant' &&
+          (!last.content || String(last.content).trim() === '')
+        ) {
+          updated[updated.length - 1] = {
+            ...last,
+            content: '⚠️ La conexión se cerró sin recibir respuesta. Revisa la consola del servidor (posible saturación de memoria).',
+          };
+        }
+        return updated;
+      });
 
       // Al finalizar la generación (éxito o error), persistir el último valor conocido de tokens (punto 2 del requerimiento)
       const finalTokens = latestTokensRef.current > 0 ? latestTokensRef.current : (sessionUsedTokens ?? 0);
