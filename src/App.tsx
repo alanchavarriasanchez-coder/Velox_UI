@@ -283,7 +283,7 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-neutral-900 text-white flex relative">
+    <div className="h-[100dvh] w-screen overflow-hidden bg-neutral-900 text-white flex relative">
       <div className={`${isSidebarOpen ? 'flex' : 'hidden'} md:flex absolute md:relative z-40 h-full w-64`}>
         <Sidebar
           sessions={sessions}
@@ -321,7 +321,7 @@ export default function App() {
 
       {isSettingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-[28rem] max-h-[90vh] overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-950 p-4 shadow-2xl">
+          <div className="w-[92%] max-w-[28rem] max-h-[90dvh] overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-950 p-4 shadow-2xl">
             <h3 className="font-mono text-sm font-medium text-neutral-200 mb-3">Configuración de Red</h3>
             {settingsMessage && (
               <p className="mb-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-[11px] font-mono text-amber-300">

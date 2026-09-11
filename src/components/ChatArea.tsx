@@ -721,7 +721,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="hidden md:flex items-center gap-2.5">
           <div className="flex items-center gap-2 rounded-lg border border-neutral-800/60 bg-neutral-900/40 px-3 py-1.5">
             <span className="relative flex size-2">
               <span className="absolute inline-flex size-full rounded-full animate-ping bg-emerald-400/60" />
@@ -873,7 +873,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       </div>
 
       {/* Caja de entrada inferior */}
-      <div className="shrink-0 px-4 pb-5 pt-2">
+      <div className="shrink-0 px-4 pb-7 md:pb-5 pt-2">
         <div className="mx-auto max-w-3xl">
           {attachedFile && (
             <div className="mb-2 flex items-center gap-2 rounded-lg bg-neutral-900 border border-neutral-800/80 px-2.5 py-1.5 text-xs text-neutral-300 w-fit animate-fade-in font-mono shadow-md">
@@ -924,7 +924,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isGenerating}
-              className="flex size-8 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-neutral-200 disabled:opacity-40"
+              className="flex size-10 md:size-8 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-neutral-200 disabled:opacity-40"
               title="Adjuntar archivo de texto"
             >
               <Paperclip className="size-4" />
@@ -958,7 +958,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
                   }
                   setIsGenerating(false);
                 }}
-                className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-neutral-800 text-neutral-200 transition-colors hover:bg-neutral-700"
+                className="flex size-10 md:size-8 shrink-0 items-center justify-center rounded-lg bg-neutral-800 text-neutral-200 transition-colors hover:bg-neutral-700"
                 aria-label="Detener generación"
               >
                 <Square className="size-3.5 fill-current" />
@@ -968,7 +968,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
                 type="button"
                 onClick={handleSend}
                 disabled={!canSend}
-                className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-neutral-900 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-600"
+                className="flex size-10 md:size-8 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-neutral-900 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-600"
                 aria-label="Enviar mensaje"
               >
                 <ArrowUp className="size-4" />
