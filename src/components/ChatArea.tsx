@@ -4,7 +4,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ArrowUp, Square, Sparkles, User, Brain, ChevronRight, Loader2, Trash2, Menu, Paperclip, X } from 'lucide-react';
 import { Message } from '../App';
-import { ServiceConfig, buildServiceUrl, uuid } from '../config';
+import { ServiceConfig, ProviderType, ModelOption, DEFAULT_MODEL_OPTIONS, PROVIDER_LABELS, buildServiceUrl, uuid } from '../config';
+import { sendChatCompletion, ChatMessage } from '../services/llmService';
 
 interface ChatAreaProps {
   messages: Message[];
@@ -18,6 +19,23 @@ interface ChatAreaProps {
   initialSessionTokens?: number | null;
   searchConfig?: ServiceConfig;
   systemPrompt?: string;
+  apiKeys: Record<ProviderType, string>;
+}
+
+// Identifica de forma única un modelo incluso si dos proveedores comparten id.
+function modelKey(option: ModelOption): string {
+  return `${option.provider}:${option.id}`;
+}
+
+// Eventos enriquecidos que solo emite el backend local (OpenVINO) además del
+// texto en streaming.
+interface LocalStreamEvent {
+  note?: string;
+  error?: string;
+  usage?: { total_tokens?: number };
+  web_sources?: Array<{ title: string; url: string }>;
+  context_truncated?: boolean;
+  queue_position?: number;
 }
 
 // Función auxiliar para extraer el contenido de pensamiento y el texto final
@@ -197,7 +215,7 @@ const MessageItem = React.memo(({
 });
 MessageItem.displayName = 'MessageItem';
 
-const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendConfig, onToggleSidebar, maxTokens, onUpdateUsage, initialSessionTokens, searchConfig, systemPrompt }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserMessage, onDeleteCurrentSession, backendConfig, onToggleSidebar, maxTokens, onUpdateUsage, initialSessionTokens, searchConfig, systemPrompt, apiKeys }) => {
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [tps, setTps] = useState<number | null>(null);
@@ -245,6 +263,20 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
 
   // --- Estado para indicar si se recortaron mensajes por tokens ---
   const [isTrimmed, setIsTrimmed] = useState(false);
+
+  // Catálogo unificado: modelos locales (dinámicos del backend) + cloud (estáticos).
+  const modelOptions: ModelOption[] = [
+    ...availableModels.map((m) => ({
+      id: m.id,
+      label: `${m.id} · ${m.size_mb} MB`,
+      provider: 'local' as const,
+      contextTokens: maxTokens ?? 0,
+    })),
+    ...DEFAULT_MODEL_OPTIONS,
+  ];
+  const selectedModelOption = modelOptions.find((o) => modelKey(o) === selectedModel) ?? null;
+  const cloudProviders = ['deepseek', 'openai', 'anthropic'] as const;
+  const isCloudSelected = selectedModelOption?.provider !== undefined && selectedModelOption.provider !== 'local';
 
   // Ref para recordar el último valor de sessionUsedTokens reportado, evitando bucles
   const lastReportedTokens = useRef<number | null>(null);
@@ -400,9 +432,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
         const active: string = json.active_model ?? '';
         setAvailableModels(models);
         if (active) {
-          setSelectedModel(active);
+          setSelectedModel(`local:${active}`);
         } else if (models.length > 0) {
-          setSelectedModel(models[0].id);
+          setSelectedModel(`local:${models[0].id}`);
         }
       } catch (err) {
         console.error('Error fetching models:', err);
@@ -414,6 +446,21 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const handleSend = async () => {
     const trimmed = input.trim();
     if ((!trimmed && !attachedFile) || isGenerating || isGeneratingRef.current) return;
+
+    const modelOption = selectedModelOption;
+    if (!modelOption) {
+      alert('Selecciona un modelo válido antes de enviar el mensaje.');
+      return;
+    }
+
+    const isCloud = modelOption.provider !== 'local';
+    if (isCloud && !(apiKeys[modelOption.provider] ?? '').trim()) {
+      alert(
+        `El modelo "${modelOption.label}" requiere una API Key de ${PROVIDER_LABELS[modelOption.provider]}.\n\n` +
+          'Configúrala en Configuración > Proveedores Cloud y vuelve a intentarlo.'
+      );
+      return;
+    }
 
     // Reiniciar indicador de historial recortado al enviar un nuevo mensaje
     setIsTrimmed(false);
@@ -452,7 +499,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
 
     // --- Inicio: recorte por tokens antes de enviar ---
     const messagesToSend = [...messages, userMsg];
-    const maxSafeTokens = maxTokens ? maxTokens * 0.8 : 32768 * 0.8;
+    const contextLimit = modelOption.contextTokens || maxTokens || 32768;
+    const maxSafeTokens = contextLimit * 0.8;
     let trimmedMessages: Message[] = messagesToSend;
     let trimmedSome = false;
 
@@ -507,166 +555,150 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
+    // Mensajes en formato neutral para el servicio universal.
+    const history: ChatMessage[] = trimmedMessages.map((m) => ({
+      role: m.role === 'user' ? 'user' : 'assistant',
+      content: typeof m.content === 'string' ? m.content : String(m.content),
+    }));
+
+    if (isCloud) {
+      if (systemPrompt && systemPrompt.trim()) {
+        history.unshift({ role: 'system', content: systemPrompt.trim() });
+      }
+      // El cloud no recibe adjuntos binarios: se inyecta el texto extraído como
+      // parte del último turno del usuario.
+      if (currentAttachment?.preview_text) {
+        const last = history[history.length - 1];
+        history[history.length - 1] = {
+          ...last,
+          content: `${last.content}\n\n[Archivo adjunto: ${currentAttachment.name}]\n${currentAttachment.preview_text}`,
+        };
+      }
+    }
+
+    let tokenCount = 0;
+    let startTime = 0;
+    let pendingWebSources: Array<{ title: string; url: string }> | null = null;
+    let contextTruncated = false;
+    setTps(null);
+
     try {
-      const response = await fetch(buildServiceUrl(backendConfig, '/v1/chat/completions'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Client-Name': 'VeloxUI',
-        },
-        body: JSON.stringify({
-          model: selectedModel,
-          messages: trimmedMessages,
-          stream: true,
-          web_search: webSearchEnabled,
-          ...(webSearchEnabled && searchConfig
-            ? { search_engine_url: `http://${searchConfig.ip}:${searchConfig.port}` }
-            : {}),
-          ...(systemPrompt && systemPrompt.trim() ? { system_prompt: systemPrompt.trim() } : {}),
-          attachments: currentAttachment
+      await sendChatCompletion({
+        messages: history,
+        modelOption,
+        apiKeys,
+        backendUrl: buildServiceUrl(backendConfig, ''),
+        signal: controller.signal,
+        systemPrompt: isCloud ? undefined : systemPrompt,
+        webSearch: !isCloud && webSearchEnabled,
+        searchEngineUrl:
+          !isCloud && webSearchEnabled && searchConfig
+            ? `http://${searchConfig.ip}:${searchConfig.port}`
+            : undefined,
+        attachments:
+          !isCloud && currentAttachment
             ? [
                 {
                   name: currentAttachment.name,
                   mime_type: currentAttachment.mime_type,
-                  data: currentAttachment.data_base64,
+                  data_base64: currentAttachment.data_base64,
                 },
               ]
-            : [],
-        }),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      if (!response.body) throw new Error('No readable stream');
-      const reader = response.body.getReader();
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      let tokenCount = 0;
-      let startTime = 0;
-      setTps(null);
-      let lastParsed: any = null; // <-- guarda el último JSON parseado
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim();
-            if (data === '[DONE]') {
-              // captura web_sources si el último mensaje los contenía
-              if (lastParsed && lastParsed.web_sources) {
-                setWebSources(lastParsed.web_sources);
-              }
-              // Aviso persistente en el chat si hubo recorte de contexto
-              if (lastParsed && lastParsed.context_truncated) {
-                setMessages(prev => [
-                  ...prev,
-                  {
-                    id: uuid(),
-                    role: 'assistant',
-                    content: '> ⚠️ **Aviso de VeloxUI:** El archivo adjunto o los mensajes más antiguos han sido descargados de la memoria de video para evitar un desbordamiento. El modelo ya no tiene acceso a ellos.',
-                    streaming: false,
-                  } as Message,
-                ]);
-              }
-              break;
+            : undefined,
+        onChunk: (delta) => {
+          // Al llegar texto, cualquier ajuste de contexto ya terminó.
+          setIsSearching(false);
+          setIsSummarizing(false);
+          if (tokenCount === 0) {
+            startTime = performance.now();
+          }
+          tokenCount++;
+          const elapsedTime = (performance.now() - startTime) / 1000;
+          if (elapsedTime > 0) {
+            setTps(parseFloat((tokenCount / elapsedTime).toFixed(1)));
+          }
+          setMessages((prev) => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last && last.role === 'assistant') {
+              updated[updated.length - 1] = { ...last, content: last.content + delta };
             }
-            try {
-              const parsed = JSON.parse(data);
-              lastParsed = parsed; // actualiza el último JSON válido
+            return updated;
+          });
+        },
+        onEvent: (event) => {
+          const parsed = event as LocalStreamEvent;
 
-              // Error reportado por el backend: inyectarlo en el último mensaje del asistente
-              if (parsed.error) {
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  const last = updated[updated.length - 1];
-                  if (last && last.role === 'assistant') {
-                    updated[updated.length - 1] = { ...last, content: `⚠️ ${parsed.error}` };
-                  }
-                  return updated;
-                });
-                break;
+          // Error reportado por el backend: inyectarlo en el último mensaje.
+          if (parsed.error) {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const last = updated[updated.length - 1];
+              if (last && last.role === 'assistant') {
+                updated[updated.length - 1] = { ...last, content: `⚠️ ${parsed.error}` };
               }
+              return updated;
+            });
+            return;
+          }
 
-              // Feedback visual: notificación de ajuste de contexto
-              if (parsed.note === 'truncating') {
-                setIsSummarizing(true);
-                setSummarizingText('Contexto lleno, haciendo ajuste...');
-              }
-              if (parsed.note === 'summarizing') {
-                setIsSummarizing(true);
-                setSummarizingText('Contexto lleno, resumiendo conversación...');
-              }
-              if (parsed.note === 'searching') {
-                setIsSearching(true);
-              }
-              if (parsed.note === 'queued') {
-                setQueuePosition(parsed.queue_position ?? 0);
-              }
-              if (parsed.note === 'started') {
-                setQueuePosition(null);
-              }
+          // Feedback visual: notificación de ajuste de contexto.
+          if (parsed.note === 'truncating') {
+            setIsSummarizing(true);
+            setSummarizingText('Contexto lleno, haciendo ajuste...');
+          }
+          if (parsed.note === 'summarizing') {
+            setIsSummarizing(true);
+            setSummarizingText('Contexto lleno, resumiendo conversación...');
+          }
+          if (parsed.note === 'searching') {
+            setIsSearching(true);
+          }
+          if (parsed.note === 'queued') {
+            setQueuePosition(parsed.queue_position ?? 0);
+          }
+          if (parsed.note === 'started') {
+            setQueuePosition(null);
+          }
 
-              // Si llegamos a contenido delta, el ajuste terminó (el modelo ya produce texto)
-              const delta = parsed?.choices?.[0]?.delta?.content;
-              if (delta) {
-                setIsSearching(false);
-                if (isSummarizing) {
-                  setIsSummarizing(false);
-                  setSummarizingText('Contexto lleno, haciendo ajuste...');
-                }
-                if (tokenCount === 0) {
-                  startTime = performance.now();
-                }
-                tokenCount++;
+          if (parsed.web_sources) {
+            pendingWebSources = parsed.web_sources;
+          }
+          if (parsed.context_truncated) {
+            contextTruncated = true;
+          }
 
-                const elapsedTime = (performance.now() - startTime) / 1000;
-                if (elapsedTime > 0) {
-                  setTps(parseFloat((tokenCount / elapsedTime).toFixed(1)));
-                }
-
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  const last = updated[updated.length - 1];
-                  if (last && last.role === 'assistant') {
-                    updated[updated.length - 1] = { ...last, content: last.content + delta };
-                  }
-                  return updated;
-                });
-              }
-
-              if (parsed.usage) {
-                const { total_tokens } = parsed.usage;
-                if (total_tokens !== undefined) {
-                  setSessionUsedTokens(total_tokens);
-                  // Notificar al padre inmediatamente (punto 1 del requerimiento)
-                  onUpdateUsage?.(total_tokens);
-                  // Guardar sincrónicamente el valor para usarlo al finalizar
-                  latestTokensRef.current = total_tokens;
-                }
-
-                // Aviso de contexto ajustado automáticamente
-                if (parsed.context_truncated === true) {
-                  setContextWarning('Contexto ajustado automáticamente');
-                  setTimeout(() => setContextWarning(null), 4000);
-                }
-              }
-            } catch (e) {
-              // ignore parse errors
+          if (parsed.usage) {
+            const { total_tokens } = parsed.usage;
+            if (total_tokens !== undefined) {
+              setSessionUsedTokens(total_tokens);
+              onUpdateUsage?.(total_tokens);
+              latestTokensRef.current = total_tokens;
+            }
+            if (parsed.context_truncated === true) {
+              setContextWarning('Contexto ajustado automáticamente');
+              setTimeout(() => setContextWarning(null), 4000);
             }
           }
-        }
+        },
+      });
+
+      // Post-proceso exclusivo del backend local.
+      if (pendingWebSources) {
+        setWebSources(pendingWebSources);
       }
+      if (contextTruncated) {
+        setMessages(prev => [
+          ...prev,
+          {
+            id: uuid(),
+            role: 'assistant',
+            content: '> ⚠️ **Aviso de VeloxUI:** El archivo adjunto o los mensajes más antiguos han sido descargados de la memoria de video para evitar un desbordamiento. El modelo ya no tiene acceso a ellos.',
+            streaming: false,
+          } as Message,
+        ]);
+      }
+
       setMessages(prev => prev.map(msg => {
         if (msg.id === assistantMsgId) {
           return { ...msg, streaming: false };
@@ -674,10 +706,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
         return msg;
       }));
     } catch (error: any) {
-      if (error.name === 'AbortError') {
-        // User stopped generation, do nothing
+      if (error?.name === 'AbortError') {
+        // El usuario detuvo la generación.
       } else {
         console.error('Error fetching chat completion:', error);
+        const message = error instanceof Error ? error.message : String(error);
         setMessages(prev => {
           const updated = [...prev];
           if (updated.length > 0 && updated[updated.length - 1].role === 'assistant' && updated[updated.length - 1].content === '') {
@@ -685,7 +718,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           }
           return updated;
         });
-        setMessages(prev => [...prev, { role: 'assistant', content: 'Error al conectar con el servidor.' }]);
+        setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${message}` }]);
       }
     } finally {
       setIsGenerating(false);
@@ -752,14 +785,34 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
               className="cursor-pointer appearance-none rounded-lg border border-neutral-800 bg-neutral-900 py-1.5 pl-3 pr-9 text-sm text-neutral-100 outline-none transition-colors hover:border-neutral-700 focus:border-neutral-600"
               aria-label="Seleccionar modelo"
             >
-              {availableModels.length === 0 && (
-                <option value="" className="bg-neutral-900">Cargando modelos…</option>
-              )}
-              {availableModels.map((m) => (
-                <option key={m.id} value={m.id} className="bg-neutral-900">
-                  {m.id} · {m.size_mb} MB
-                </option>
-              ))}
+              <optgroup label="Local (OpenVINO)" className="bg-neutral-900">
+                {availableModels.length === 0 ? (
+                  <option value="" disabled className="bg-neutral-900">
+                    Cargando modelos…
+                  </option>
+                ) : (
+                  modelOptions
+                    .filter((o) => o.provider === 'local')
+                    .map((o) => (
+                      <option key={modelKey(o)} value={modelKey(o)} className="bg-neutral-900">
+                        {o.label}
+                      </option>
+                    ))
+                )}
+              </optgroup>
+              {cloudProviders.map((provider) => {
+                const options = modelOptions.filter((o) => o.provider === provider);
+                if (options.length === 0) return null;
+                return (
+                  <optgroup key={provider} label={PROVIDER_LABELS[provider]} className="bg-neutral-900">
+                    {options.map((o) => (
+                      <option key={modelKey(o)} value={modelKey(o)} className="bg-neutral-900">
+                        {o.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                );
+              })}
             </select>
             <ChevronRight className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 rotate-90 text-neutral-500" />
           </div>
@@ -792,18 +845,19 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
             )}
           </div>
 
-          {/* Botón toggle de búsqueda web */}
+          {/* Botón toggle de búsqueda web (solo backend local) */}
           <button
             type="button"
             onClick={() => setWebSearchEnabled(prev => !prev)}
-            className={`rounded-lg border px-2 py-1 text-xs font-mono transition-colors ${
-              webSearchEnabled
+            disabled={isCloudSelected}
+            className={`rounded-lg border px-2 py-1 text-xs font-mono transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+              webSearchEnabled && !isCloudSelected
                 ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
                 : 'border-neutral-800 bg-neutral-900 text-neutral-500 hover:border-neutral-700'
             }`}
-            title="Búsqueda en internet"
+            title={isCloudSelected ? 'La búsqueda web solo está disponible en modelos locales' : 'Búsqueda en internet'}
           >
-            🌐 Web {webSearchEnabled ? 'ON' : 'OFF'}
+            🌐 Web {webSearchEnabled && !isCloudSelected ? 'ON' : 'OFF'}
           </button>
 
           {onDeleteCurrentSession && (
@@ -1021,7 +1075,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           </div>
 
           <p className="mt-2 text-center font-mono text-[11px] text-neutral-700">
-            VeloxUI ejecuta modelos localmente vía Intel OpenVINO
+            {selectedModelOption
+              ? `VeloxUI · ${PROVIDER_LABELS[selectedModelOption.provider]}`
+              : 'VeloxUI ejecuta modelos localmente vía Intel OpenVINO'}
+            {isCloudSelected ? ' (API externa)' : ''}
           </p>
 
           {maxTokens && (

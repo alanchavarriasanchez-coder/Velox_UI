@@ -4,7 +4,7 @@ import ChatArea from './components/ChatArea';
 import SplashScreen from './components/SplashScreen';
 import { join } from '@tauri-apps/api/path';
 import { BaseDirectory, writeTextFile, readTextFile, mkdir, exists, remove, readDir } from '@tauri-apps/plugin-fs';
-import { ServiceConfig, DEFAULT_BACKEND_CONFIG, DEFAULT_SEARCH_CONFIG, loadServiceConfig, saveServiceConfig, buildServiceUrl, loadSystemPrompt, saveSystemPrompt, uuid } from './config';
+import { ServiceConfig, ProviderType, DEFAULT_BACKEND_CONFIG, DEFAULT_SEARCH_CONFIG, loadServiceConfig, saveServiceConfig, buildServiceUrl, loadSystemPrompt, saveSystemPrompt, loadApiKeys, saveApiKeys, CLOUD_PROVIDERS, PROVIDER_LABELS, uuid } from './config';
 
 function isTauri(): boolean {
   return typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__ !== undefined;
@@ -93,6 +93,7 @@ export default function App() {
     loadServiceConfig('veloxui_search_backend', DEFAULT_SEARCH_CONFIG)
   );
   const [systemPrompt, setSystemPrompt] = useState<string>(() => loadSystemPrompt());
+  const [apiKeys, setApiKeys] = useState<Record<ProviderType, string>>(() => loadApiKeys());
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const [maxTokens, setMaxTokens] = useState<number>(32768);
@@ -100,7 +101,12 @@ export default function App() {
 
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
 
-  const handleSaveSettings = (newBackend: ServiceConfig, newSearch: ServiceConfig, newSystemPrompt: string) => {
+  const handleSaveSettings = (
+    newBackend: ServiceConfig,
+    newSearch: ServiceConfig,
+    newSystemPrompt: string,
+    newApiKeys: Record<ProviderType, string>
+  ) => {
     const backendResult = saveServiceConfig('veloxui_backend', newBackend, DEFAULT_BACKEND_CONFIG);
     const searchResult = saveServiceConfig('veloxui_search_backend', newSearch, DEFAULT_SEARCH_CONFIG);
     const healedBackend = loadServiceConfig('veloxui_backend', DEFAULT_BACKEND_CONFIG);
@@ -110,6 +116,9 @@ export default function App() {
     setSearchConfig(healedSearch);
     setSystemPrompt(newSystemPrompt.trim());
     saveSystemPrompt(newSystemPrompt);
+
+    saveApiKeys(newApiKeys);
+    setApiKeys(loadApiKeys());
 
     if (backendResult.healed || searchResult.healed) {
       setSettingsMessage(
@@ -317,6 +326,7 @@ export default function App() {
         initialSessionTokens={currentSession?.usageTokens ?? null}
         searchConfig={searchConfig}
         systemPrompt={systemPrompt}
+        apiKeys={apiKeys}
       />
 
       {isSettingsOpen && (
@@ -389,6 +399,32 @@ export default function App() {
             <p className="mt-1 text-[11px] font-mono text-neutral-600">
               Se envía al servidor en cada mensaje. Déjalo vacío para usar el prompt configurado en el archivo del servidor.
             </p>
+
+            <div className="mt-4 border-t border-neutral-800 pt-3">
+              <h4 className="font-mono text-[11px] uppercase tracking-wider text-neutral-500 mb-2">
+                Proveedores Cloud
+              </h4>
+              {CLOUD_PROVIDERS.map((provider) => (
+                <div key={provider} className="mt-3 first:mt-0">
+                  <label className="block font-mono text-[11px] text-neutral-500 uppercase mb-1">
+                    API Key de {PROVIDER_LABELS[provider]}
+                  </label>
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    spellCheck={false}
+                    defaultValue={apiKeys[provider]}
+                    id={`settings-apikey-${provider}`}
+                    placeholder="sk-..."
+                    className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 font-mono text-xs text-neutral-100 outline-none focus:border-neutral-700"
+                  />
+                </div>
+              ))}
+              <p className="mt-2 text-[11px] font-mono text-neutral-600">
+                Las claves se guardan solo en este dispositivo. El servidor local sigue usando la configuración de red de arriba.
+              </p>
+            </div>
+
             <div className="mt-4 flex justify-end gap-2 text-xs font-mono">
               <button
                 onClick={() => setIsSettingsOpen(false)}
@@ -404,10 +440,18 @@ export default function App() {
                   const searchPortInput = document.getElementById('settings-search-port-input') as HTMLInputElement;
                   const systemPromptInput = document.getElementById('settings-system-prompt-input') as HTMLTextAreaElement;
                   if (ipInput && portInput && searchIpInput && searchPortInput && systemPromptInput) {
+                    const newApiKeys: Record<ProviderType, string> = { ...apiKeys };
+                    for (const provider of CLOUD_PROVIDERS) {
+                      const keyInput = document.getElementById(
+                        `settings-apikey-${provider}`
+                      ) as HTMLInputElement | null;
+                      if (keyInput) newApiKeys[provider] = keyInput.value;
+                    }
                     handleSaveSettings(
                       { ip: ipInput.value.trim(), port: portInput.value.trim() },
                       { ip: searchIpInput.value.trim(), port: searchPortInput.value.trim() },
-                      systemPromptInput.value
+                      systemPromptInput.value,
+                      newApiKeys
                     );
                   }
                 }}

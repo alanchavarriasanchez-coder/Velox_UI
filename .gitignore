@@ -9,3 +9,5 @@ node_modules/
 dist/
 veloxui.keystore
 repomix-output.xml
+src-tauri/target/
+target/

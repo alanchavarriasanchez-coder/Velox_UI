@@ -1,3 +1,18 @@
+export type ProviderType = 'local' | 'deepseek' | 'openai' | 'anthropic' | 'custom';
+
+export interface ModelOption {
+  id: string;
+  label: string;
+  provider: ProviderType;
+  contextTokens: number;
+}
+
+// Configuración del usuario para proveedores cloud. Se mantiene separada de la
+// configuración de red (ServiceConfig) para no acoplarla al backend FastAPI local.
+export interface UserConfig {
+  apiKeys: Record<ProviderType, string>;
+}
+
 export interface ServiceConfig {
   ip: string;
   port: string;
@@ -102,6 +117,72 @@ function persistServiceConfig(prefix: string, config: ServiceConfig): void {
 export function buildServiceUrl(config: ServiceConfig, path: string): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `http://${config.ip}:${config.port}${normalizedPath}`;
+}
+
+const API_KEYS_STORAGE_KEY = 'veloxui_api_keys';
+
+export const PROVIDER_TYPES: readonly ProviderType[] = [
+  'local',
+  'deepseek',
+  'openai',
+  'anthropic',
+  'custom',
+] as const;
+
+// Proveedores que requieren API Key y se muestran en Configuración.
+export const CLOUD_PROVIDERS: readonly Exclude<ProviderType, 'local' | 'custom'>[] = [
+  'deepseek',
+  'openai',
+  'anthropic',
+] as const;
+
+export const PROVIDER_LABELS: Record<ProviderType, string> = {
+  local: 'Local (OpenVINO)',
+  deepseek: 'DeepSeek',
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  custom: 'Personalizado',
+};
+
+export const DEFAULT_MODEL_OPTIONS: ModelOption[] = [
+  { id: 'deepseek-chat', label: 'DeepSeek Chat', provider: 'deepseek', contextTokens: 65536 },
+  { id: 'deepseek-reasoner', label: 'DeepSeek Reasoner', provider: 'deepseek', contextTokens: 65536 },
+  { id: 'gpt-4o-mini', label: 'GPT-4o mini', provider: 'openai', contextTokens: 128000 },
+  { id: 'gpt-4o', label: 'GPT-4o', provider: 'openai', contextTokens: 128000 },
+  { id: 'claude-3-5-sonnet', label: 'Claude 3.5 Sonnet', provider: 'anthropic', contextTokens: 200000 },
+  { id: 'claude-3-5-haiku', label: 'Claude 3.5 Haiku', provider: 'anthropic', contextTokens: 200000 },
+];
+
+function emptyApiKeys(): Record<ProviderType, string> {
+  return { local: '', deepseek: '', openai: '', anthropic: '', custom: '' };
+}
+
+// Carga las API Keys persistidas. Si el JSON guardado está corrupto o faltan
+// proveedores, se completa con cadenas vacías para no romper la app.
+export function loadApiKeys(): Record<ProviderType, string> {
+  const fallback = emptyApiKeys();
+  const stored = localStorage.getItem(API_KEYS_STORAGE_KEY);
+  if (!stored) return fallback;
+
+  try {
+    const parsed = JSON.parse(stored) as Partial<Record<ProviderType, string>>;
+    const result = emptyApiKeys();
+    for (const provider of PROVIDER_TYPES) {
+      const value = parsed[provider];
+      if (typeof value === 'string') result[provider] = value;
+    }
+    return result;
+  } catch {
+    return fallback;
+  }
+}
+
+export function saveApiKeys(apiKeys: Record<ProviderType, string>): void {
+  const clean = emptyApiKeys();
+  for (const provider of PROVIDER_TYPES) {
+    clean[provider] = (apiKeys[provider] ?? '').trim();
+  }
+  localStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(clean));
 }
 
 const SYSTEM_PROMPT_KEY = 'veloxui_system_prompt';
