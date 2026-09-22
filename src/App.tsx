@@ -85,6 +85,8 @@ export default function App() {
   const isFirstRender = useRef(true);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const saveTimerRef = useRef<number | null>(null);
+  const lastSavedRef = useRef<Record<string, number>>({});
 
   const [backendConfig, setBackendConfig] = useState<ServiceConfig>(() =>
     loadServiceConfig('veloxui_backend', DEFAULT_BACKEND_CONFIG)
@@ -136,6 +138,10 @@ export default function App() {
   useEffect(() => {
     (async () => {
       const loaded = await loadSessions();
+      // Registrar las sesiones ya persistidas para no reescribirlas al inicio.
+      loaded.forEach((s) => {
+        lastSavedRef.current[s.id] = s.updatedAt;
+      });
       setSessions(loaded);
       
       if (loaded.length > 0) {
@@ -151,6 +157,7 @@ export default function App() {
         setSessions([defaultSession]);
         setCurrentSessionId(defaultSession.id);
         saveSessions([defaultSession]);
+        lastSavedRef.current[defaultSession.id] = defaultSession.updatedAt;
       }
     })();
   }, []);
@@ -176,13 +183,31 @@ export default function App() {
       return;
     }
 
-    const isAnyMessageStreaming = sessions.some((s) => 
+    const isAnyMessageStreaming = sessions.some((s) =>
       s.messages.some((m) => m.streaming)
     );
+    if (isAnyMessageStreaming) return;
 
-    if (sessions.length > 0 && !isAnyMessageStreaming) {
-      saveSessions(sessions);
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
     }
+    saveTimerRef.current = window.setTimeout(() => {
+      const changed = sessions.filter(
+        (s) => lastSavedRef.current[s.id] !== s.updatedAt
+      );
+      if (changed.length === 0) return;
+      changed.forEach((s) => {
+        lastSavedRef.current[s.id] = s.updatedAt;
+      });
+      saveSessions(changed);
+    }, 400);
+
+    return () => {
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+    };
   }, [sessions]);
 
   const handleNewChat = useCallback(() => {
@@ -225,6 +250,7 @@ export default function App() {
     }
 
     const updatedSessions = sessions.filter((s) => s.id !== sessionId);
+    delete lastSavedRef.current[sessionId];
     setSessions(updatedSessions);
 
     if (sessionId === currentSessionId) {
@@ -269,15 +295,15 @@ export default function App() {
   );
 
   const handleUpdateUsage = useCallback((tokens: number) => {
-    setSessions((prevSessions) => {
-      const newSessions = prevSessions.map((s) =>
+    // El guardado lo hace el useEffect con debounce: aquí solo actualizamos
+    // el estado. El updatedAt nuevo dispara la detección de cambios.
+    setSessions((prevSessions) =>
+      prevSessions.map((s) =>
         s.id === currentSessionId
           ? { ...s, usageTokens: tokens, updatedAt: Date.now() }
           : s
-      );
-      saveSessions(newSessions);
-      return newSessions;
-    });
+      )
+    );
   }, [currentSessionId]);
 
   useEffect(() => {

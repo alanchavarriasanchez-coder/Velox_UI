@@ -36,6 +36,8 @@ interface LocalStreamEvent {
   web_sources?: Array<{ title: string; url: string }>;
   context_truncated?: boolean;
   queue_position?: number;
+  // Texto limpio que el backend envía en el evento "done" del streaming.
+  final_text?: string | null;
 }
 
 // Función auxiliar para extraer el contenido de pensamiento y el texto final
@@ -220,7 +222,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const [isGenerating, setIsGenerating] = useState(false);
   const [tps, setTps] = useState<number | null>(null);
   const [sessionUsedTokens, setSessionUsedTokens] = useState<number | null>(null);
-  const [availableModels, setAvailableModels] = useState<{ id: string; size_mb: number }[]>([]);
+  const [availableModels, setAvailableModels] = useState<
+    { id: string; size_mb: number; max_context_tokens: number }[]
+  >([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -262,7 +266,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Estado para indicar si se recortaron mensajes por tokens ---
-  const [isTrimmed, setIsTrimmed] = useState(false);
+  const [isTrimmed] = useState(false);
 
   // Catálogo unificado: modelos locales (dinámicos del backend) + cloud (estáticos).
   const modelOptions: ModelOption[] = [
@@ -270,7 +274,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       id: m.id,
       label: `${m.id} · ${m.size_mb} MB`,
       provider: 'local' as const,
-      contextTokens: maxTokens ?? 0,
+      // Cada modelo local tiene su propio límite de contexto (el backend
+      // lo expone por modelo en /v1/models). Fallback al global si falta.
+      contextTokens: m.max_context_tokens ?? maxTokens ?? 0,
     })),
     ...DEFAULT_MODEL_OPTIONS,
   ];
@@ -377,7 +383,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     }
   };
 
-  const usedTokens = sessionUsedTokens ?? 0;
+  const usedTokens = sessionUsedTokens ?? estimateTokens(messages);
   const porcentaje = maxTokens
     ? Math.min(Math.round((usedTokens / maxTokens) * 100), 100)
     : 0;
@@ -428,7 +434,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
         } else {
           json = await res.json();
         }
-        const models: { id: string; size_mb: number }[] = json.data ?? [];
+        const models: { id: string; size_mb: number; max_context_tokens: number }[] =
+          json.data ?? [];
         const active: string = json.active_model ?? '';
         setAvailableModels(models);
         if (active) {
@@ -462,8 +469,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       return;
     }
 
-    // Reiniciar indicador de historial recortado al enviar un nuevo mensaje
-    setIsTrimmed(false);
     // Reiniciar estado de búsqueda web
     setWebSources([]);
     setIsSearching(false);
@@ -497,49 +502,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
       streaming: true,
     } as Message;
 
-    // --- Inicio: recorte por tokens antes de enviar ---
+    // El recorte de contexto lo hace ÚNICAMENTE el backend (conoce el
+    // tokenizer real, el límite por modelo y el auto-resumen). El frontend
+    // solo estima tokens para la barra visual.
     const messagesToSend = [...messages, userMsg];
-    const contextLimit = modelOption.contextTokens || maxTokens || 32768;
-    const maxSafeTokens = contextLimit * 0.8;
-    let trimmedMessages: Message[] = messagesToSend;
-    let trimmedSome = false;
-
-    if (estimateTokens(messagesToSend) > maxSafeTokens) {
-      const firstUserIdx = messagesToSend.findIndex(m => m.role === 'user');
-      const result: Message[] = [];
-      if (firstUserIdx !== -1) {
-        result.push(messagesToSend[firstUserIdx]);
-      }
-      let usedTokens = estimateTokens(result);
-      const additional: Message[] = [];
-      for (let i = messagesToSend.length - 1; i >= 0; i--) {
-        if (i === firstUserIdx) continue;
-        const testTokens = estimateTokens([messagesToSend[i]]);
-        if (usedTokens + testTokens <= maxSafeTokens) {
-          additional.unshift(messagesToSend[i]);
-          usedTokens += testTokens;
-        } else {
-          // Dejar de agregar mensajes (son más antiguos y no caben)
-          break;
-        }
-      }
-      if (firstUserIdx !== -1) {
-        trimmedMessages = result.concat(additional);
-      } else {
-        trimmedMessages = additional;
-      }
-
-      // Si aun así se excede (por ejemplo, primer usuario muy grande), no recortar
-      if (estimateTokens(trimmedMessages) > maxSafeTokens) {
-        trimmedMessages = messagesToSend;
-        trimmedSome = false;
-      } else {
-        trimmedSome = trimmedMessages.length < messagesToSend.length;
-      }
-    }
-
-    setIsTrimmed(trimmedSome);
-    // --- Fin: recorte por tokens ---
 
     setMessages(prev => [...prev, userMsg, assistantMsg]);
     setInput('');
@@ -556,7 +522,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
     abortControllerRef.current = controller;
 
     // Mensajes en formato neutral para el servicio universal.
-    const history: ChatMessage[] = trimmedMessages.map((m) => ({
+    const history: ChatMessage[] = messagesToSend.map((m) => ({
       role: m.role === 'user' ? 'user' : 'assistant',
       content: typeof m.content === 'string' ? m.content : String(m.content),
     }));
@@ -666,6 +632,21 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, setMessages, onFirstUserM
           }
           if (parsed.context_truncated) {
             contextTruncated = true;
+          }
+
+          // El backend envía "final_text" (limpio) en el evento "done". Al
+          // recibirlo, reemplazamos todo el contenido acumulado del mensaje
+          // para eliminar los ``` de apertura/cierre que se pintaron durante
+          // el streaming.
+          if (parsed.final_text !== undefined && parsed.final_text !== null) {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const last = updated[updated.length - 1];
+              if (last && last.role === 'assistant') {
+                updated[updated.length - 1] = { ...last, content: parsed.final_text ?? '' };
+              }
+              return updated;
+            });
           }
 
           if (parsed.usage) {
